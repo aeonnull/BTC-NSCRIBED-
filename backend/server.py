@@ -2,7 +2,6 @@ import os
 import uuid
 import logging
 import jwt
-import requests
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
@@ -12,7 +11,8 @@ from fastapi.responses import RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
+from bson import ObjectId
 from pydantic import BaseModel, Field
 from authlib.integrations.starlette_client import OAuth
 
@@ -24,18 +24,17 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="uploads")
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'dev-session')
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
-STORAGE_API_KEY = os.environ.get('STORAGE_API_KEY', '')
 HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
 HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
 REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'false').lower() in ('1', 'true', 'yes')
 
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "nscribed"
 
 logging.basicConfig(level=logging.INFO,
@@ -57,41 +56,6 @@ oauth.register(
     authorize_url='https://api.twitter.com/oauth/authenticate',
     api_base_url='https://api.twitter.com/1.1/',
 )
-
-# ---------- Object storage ----------
-_storage_key = None
-
-
-def init_storage():
-    global _storage_key
-    if _storage_key:
-        return _storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": STORAGE_API_KEY}, timeout=30)
-    resp.raise_for_status()
-    _storage_key = resp.json()["storage_key"]
-    return _storage_key
-
-
-def put_object(path: str, data: bytes, content_type: str) -> dict:
-    key = init_storage()
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data, timeout=120,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def get_object(path: str):
-    key = init_storage()
-    resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key}, timeout=60,
-    )
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
-
 
 MIME_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
@@ -283,42 +247,40 @@ async def holder_callback(state: str = "", result: str = "", secret: str = "",
     return RedirectResponse(f"{target}?holder={'ok' if verified else 'failed'}")
 
 
-# ---------- Upload / files ----------
+# ---------- Upload / files (stored in MongoDB GridFS — self-contained) ----------
 @api_router.post("/upload")
 async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "png")
     content_type = file.content_type or MIME_TYPES.get(ext, "image/png")
     if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
-    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     data = await file.read()
     if len(data) > 8 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image too large (max 8MB)")
-    try:
-        result = put_object(path, data, content_type)
-    except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=502, detail="Upload failed")
-    stored = result.get("path", path)
-    await db.files.insert_one({
-        "id": str(uuid.uuid4()), "storage_path": stored,
-        "original_filename": file.filename, "content_type": content_type,
-        "owner": user["id"], "is_deleted": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    return {"path": stored, "url": f"{APP_BASE_URL}/api/files/{stored}"}
+    file_id = await fs_bucket.upload_from_stream(
+        f"{user['id']}/{uuid.uuid4()}.{ext}",
+        data,
+        metadata={"content_type": content_type, "owner": user["id"],
+                  "original_filename": file.filename,
+                  "created_at": datetime.now(timezone.utc).isoformat()},
+    )
+    sid = str(file_id)
+    return {"path": sid, "url": f"{APP_BASE_URL}/api/files/{sid}"}
 
 
-@api_router.get("/files/{path:path}")
-async def download(path: str):
-    record = await db.files.find_one({"storage_path": path, "is_deleted": False})
-    if not record:
-        raise HTTPException(status_code=404, detail="File not found")
+@api_router.get("/files/{file_id}")
+async def download(file_id: str):
     try:
-        data, content_type = get_object(path)
+        oid = ObjectId(file_id)
     except Exception:
         raise HTTPException(status_code=404, detail="File not found")
-    return Response(content=data, media_type=record.get("content_type", content_type),
+    try:
+        stream = await fs_bucket.open_download_stream(oid)
+        data = await stream.read()
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found")
+    content_type = (stream.metadata or {}).get("content_type", "application/octet-stream")
+    return Response(content=data, media_type=content_type,
                     headers={"Cache-Control": "public, max-age=31536000"})
 
 
@@ -410,12 +372,6 @@ DEMO = [
 
 @app.on_event("startup")
 async def startup():
-    try:
-        init_storage()
-        logger.info("Storage initialized")
-    except Exception as e:
-        logger.error(f"Storage init failed: {e}")
-
     count = await db.users.count_documents({})
     if count == 0:
         for d in DEMO:

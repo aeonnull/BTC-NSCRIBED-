@@ -10,7 +10,9 @@ verification delegated to a friend's external app — no wallet code inside nscr
 - React + FastAPI + MongoDB. Real X OAuth 1.0a (app "Nscribed", id 32438062).
 - Public viewing = open to all. Membership (create/edit profile) = X login; can be gated to
   verified holders via REQUIRE_HOLDER flag (currently false).
-- Object storage via internal endpoint (STORAGE_API_KEY) for avatar + per-artwork uploads.
+- Object storage: user uploads (avatar + each artwork) stored in the app's own MongoDB
+  via GridFS (bucket "uploads"), served at /api/files/{id}. No external storage — fully
+  self-contained and portable with the database. No Emergent calls anywhere in the code.
 - Pretty links: domain/<handle> + copy button. Support via X @nscribed + nscribed.xyz.
 
 ## Key endpoints
