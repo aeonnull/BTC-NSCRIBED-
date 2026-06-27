@@ -1,21 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { artURI } from "../lib/art";
 import { Verified } from "../lib/icons";
 import { useAuth } from "../auth";
 
+function Thumb({ src, className }) {
+  return (
+    <div className={className} style={src ? { backgroundImage: `url("${src}")` } : { background: "var(--bg-2)" }} />
+  );
+}
+
 function PersonTile({ p, onClick }) {
   return (
-    <div
-      className="person"
-      data-testid={`person-${p.handle}`}
-      onClick={onClick}
-      tabIndex={0}
-      role="button"
-      onKeyDown={(e) => e.key === "Enter" && onClick()}
-    >
-      <div className="pa" style={{ backgroundImage: `url("${p.avatar || artURI(p.handle + "-av")}")` }} />
+    <div className="person" data-testid={`person-${p.handle}`} onClick={onClick} tabIndex={0} role="button" onKeyDown={(e) => e.key === "Enter" && onClick()}>
+      <Thumb src={p.avatar} className="pa" />
       <div className="pi">
         <div className="pname">{p.name}{p.verified && <Verified />}</div>
         <div className="phandle">@{p.handle}</div>
@@ -63,7 +61,7 @@ export default function Home() {
           </div>
           {artists.length ? (
             <div className="people" data-testid="artists-row">
-              {artists.map((p) => <PersonTile key={p.handle} p={p} onClick={() => navigate(`/u/${p.handle}`)} />)}
+              {artists.map((p) => <PersonTile key={p.handle} p={p} onClick={() => navigate(`/${p.handle}`)} />)}
             </div>
           ) : <div className="empty-note">No artists yet — be the first to inscribe.</div>}
         </div>
@@ -75,7 +73,7 @@ export default function Home() {
           </div>
           {collectors.length ? (
             <div className="people" data-testid="collectors-row">
-              {collectors.map((p) => <PersonTile key={p.handle} p={p} onClick={() => navigate(`/u/${p.handle}`)} />)}
+              {collectors.map((p) => <PersonTile key={p.handle} p={p} onClick={() => navigate(`/${p.handle}`)} />)}
             </div>
           ) : <div className="empty-note">No collectors yet.</div>}
         </div>

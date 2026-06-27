@@ -17,3 +17,12 @@ api.interceptors.request.use((config) => {
 });
 
 export const twitterLoginUrl = `${API}/auth/twitter/login`;
+
+export async function uploadImage(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const { data } = await api.post("/upload", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data.url;
+}

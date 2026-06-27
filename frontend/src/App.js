@@ -17,10 +17,10 @@ function App() {
           <Header />
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/u/:handle" element={<Profile />} />
-            <Route path="/u/:handle/c/:cid" element={<Collection />} />
             <Route path="/edit" element={<EditProfile />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/:handle/c/:cid" element={<Collection />} />
+            <Route path="/:handle" element={<Profile />} />
           </Routes>
           <Footer />
         </BrowserRouter>

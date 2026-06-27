@@ -2,18 +2,21 @@ import os
 import uuid
 import logging
 import jwt
+import requests
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, Request, Depends, HTTPException, Header
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, APIRouter, Request, Depends, HTTPException, Header, UploadFile, File
+from fastapi.responses import RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from authlib.integrations.starlette_client import OAuth
+
+from art import art_uri, build_demo_works
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -27,6 +30,10 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'dev-session')
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+APP_NAME = "nscribed"
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -48,6 +55,46 @@ oauth.register(
     api_base_url='https://api.twitter.com/1.1/',
 )
 
+# ---------- Object storage ----------
+_storage_key = None
+
+
+def init_storage():
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_object(path: str):
+    key = init_storage()
+    resp = requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+
+MIME_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+    "gif": "image/gif", "webp": "image/webp",
+}
+
 
 # ---------- Models ----------
 class LinkItem(BaseModel):
@@ -60,20 +107,27 @@ class MarketItem(BaseModel):
     url: str
 
 
+class Work(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    title: str = ""
+    image: str = ""
+
+
 class Collection(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     name: str
     chain: str = "Bitcoin"
     year: str = "2025"
-    pieces: int = 6
     marketplace_name: str = ""
     marketplace_url: str = ""
+    works: List[Work] = []
 
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
-    type: Optional[str] = None  # 'artist' | 'collector'
+    type: Optional[str] = None
     bio: Optional[str] = None
+    avatar: Optional[str] = None
     links: Optional[List[LinkItem]] = None
     marketplaces: Optional[List[MarketItem]] = None
     collections: Optional[List[Collection]] = None
@@ -81,10 +135,7 @@ class ProfileUpdate(BaseModel):
 
 # ---------- Helpers ----------
 def make_token(user_id: str) -> str:
-    payload = {
-        'sub': user_id,
-        'exp': datetime.now(timezone.utc) + timedelta(days=30),
-    }
+    payload = {'sub': user_id, 'exp': datetime.now(timezone.utc) + timedelta(days=30)}
     return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
 
@@ -148,26 +199,18 @@ async def twitter_callback(request: Request):
 
     existing = await db.users.find_one({"twitter_id": twitter_id})
     if existing:
-        await db.users.update_one(
-            {"twitter_id": twitter_id},
-            {"$set": {"name": name, "avatar": avatar, "handle": handle}},
-        )
+        update = {"name": name, "handle": handle}
+        if not existing.get("avatar"):
+            update["avatar"] = avatar
+        await db.users.update_one({"twitter_id": twitter_id}, {"$set": update})
         user_id = existing["id"]
     else:
         user_id = str(uuid.uuid4())
         await db.users.insert_one({
-            "id": user_id,
-            "twitter_id": twitter_id,
-            "handle": handle,
-            "name": name,
-            "avatar": avatar,
-            "verified": verified,
-            "type": "artist",
-            "bio": "",
-            "links": [],
-            "marketplaces": [],
-            "collections": [],
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "id": user_id, "twitter_id": twitter_id, "handle": handle,
+            "name": name, "avatar": avatar, "verified": verified,
+            "type": "artist", "bio": "", "links": [], "marketplaces": [],
+            "collections": [], "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
     jwt_token = make_token(user_id)
@@ -177,6 +220,45 @@ async def twitter_callback(request: Request):
 @api_router.get("/auth/me")
 async def auth_me(user: dict = Depends(get_current_user)):
     return public_profile(user)
+
+
+# ---------- Upload / files ----------
+@api_router.post("/upload")
+async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "png")
+    content_type = file.content_type or MIME_TYPES.get(ext, "image/png")
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 8MB)")
+    try:
+        result = put_object(path, data, content_type)
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=502, detail="Upload failed")
+    stored = result.get("path", path)
+    await db.files.insert_one({
+        "id": str(uuid.uuid4()), "storage_path": stored,
+        "original_filename": file.filename, "content_type": content_type,
+        "owner": user["id"], "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"path": stored, "url": f"{APP_BASE_URL}/api/files/{stored}"}
+
+
+@api_router.get("/files/{path:path}")
+async def download(path: str):
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False})
+    if not record:
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        data, content_type = get_object(path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found")
+    return Response(content=data, media_type=record.get("content_type", content_type),
+                    headers={"Cache-Control": "public, max-age=31536000"})
 
 
 # ---------- Profile routes ----------
@@ -205,6 +287,8 @@ async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_cur
         update["type"] = payload.type
     if payload.bio is not None:
         update["bio"] = payload.bio
+    if payload.avatar is not None:
+        update["avatar"] = payload.avatar
     if payload.links is not None:
         update["links"] = [l.model_dump() for l in payload.links]
     if payload.marketplaces is not None:
@@ -223,68 +307,68 @@ DEMO = [
      "bio": "Inscribing minimal black-on-white characters since block 767,430. Hand-drawn, one of one, mostly chaos.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "Discord", "url": "https://discord.com"}],
      "marketplaces": [{"name": "OpenSea", "url": "https://opensea.io"}, {"name": "Gamma", "url": "https://gamma.io"}],
-     "collections": [
-         {"id": "chaos", "name": "Chaos", "chain": "Bitcoin", "year": "2024", "pieces": 8, "marketplace_name": "Gamma", "marketplace_url": "https://gamma.io"},
-         {"id": "punk", "name": "Punk Royale", "chain": "Bitcoin", "year": "2023", "pieces": 6, "marketplace_name": "OpenSea", "marketplace_url": "https://opensea.io"},
-         {"id": "nodes", "name": "Nodebirds", "chain": "Bitcoin", "year": "2024", "pieces": 9, "marketplace_name": "", "marketplace_url": ""},
-     ]},
+     "cols": [("chaos", "Chaos", "Bitcoin", "2024", 8, "Gamma", "https://gamma.io"),
+              ("punk", "Punk Royale", "Bitcoin", "2023", 6, "OpenSea", "https://opensea.io"),
+              ("nodes", "Nodebirds", "Bitcoin", "2024", 9, "", "")]},
     {"handle": "void_ord", "name": "VOID", "type": "artist", "verified": True,
      "bio": "Generative noise, on-chain. Layers, rarity, exclusion rules — exported straight to inscription.",
      "links": [{"label": "Website", "url": "https://example.com"}],
      "marketplaces": [{"name": "Gamma", "url": "https://gamma.io"}],
-     "collections": [
-         {"id": "static", "name": "Static Gods", "chain": "Bitcoin", "year": "2025", "pieces": 8, "marketplace_name": "Gamma", "marketplace_url": "https://gamma.io"},
-         {"id": "field", "name": "Field Notes", "chain": "Bitcoin", "year": "2024", "pieces": 6, "marketplace_name": "", "marketplace_url": ""},
-     ]},
+     "cols": [("static", "Static Gods", "Bitcoin", "2025", 8, "Gamma", "https://gamma.io"),
+              ("field", "Field Notes", "Bitcoin", "2024", 6, "", "")]},
     {"handle": "sable_btc", "name": "SABLE", "type": "artist", "verified": False,
      "bio": "Pixel portraiture. Slow drops, no roadmap.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "Discord", "url": "https://discord.com"}],
      "marketplaces": [{"name": "Ordinals Wallet", "url": "https://ordinalswallet.com"}],
-     "collections": [
-         {"id": "idols", "name": "Idols", "chain": "Bitcoin", "year": "2025", "pieces": 9, "marketplace_name": "Ordinals Wallet", "marketplace_url": "https://ordinalswallet.com"},
-     ]},
+     "cols": [("idols", "Idols", "Bitcoin", "2025", 9, "Ordinals Wallet", "https://ordinalswallet.com")]},
     {"handle": "runeandco", "name": "RUNE&CO", "type": "artist", "verified": True,
      "bio": "A studio inscribing type and glyphs. Everything is a manifest.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "X", "url": "https://x.com"}],
      "marketplaces": [{"name": "Magic Eden", "url": "https://magiceden.io"}],
-     "collections": [
-         {"id": "glyphs", "name": "Glyphset", "chain": "Bitcoin", "year": "2024", "pieces": 8, "marketplace_name": "Magic Eden", "marketplace_url": "https://magiceden.io"},
-     ]},
+     "cols": [("glyphs", "Glyphset", "Bitcoin", "2024", 8, "Magic Eden", "https://magiceden.io")]},
     {"handle": "kane_eth", "name": "0xKANE", "type": "collector", "verified": True,
      "bio": "Collecting on-chain art across Bitcoin and Ethereum. Curating, not flexing the whole wallet.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "Discord", "url": "https://discord.com"}],
      "marketplaces": [{"name": "OpenSea", "url": "https://opensea.io"}],
-     "collections": [
-         {"id": "vault", "name": "The Vault", "chain": "Mixed", "year": "2021-25", "pieces": 8, "marketplace_name": "OpenSea", "marketplace_url": "https://opensea.io"},
-     ]},
+     "cols": [("vault", "The Vault", "Mixed", "2021-25", 8, "OpenSea", "https://opensea.io")]},
     {"handle": "degenjane", "name": "DEGENJANE", "type": "collector", "verified": False,
      "bio": "Early to Ordinals. Working with a few studios. Mostly here for the art.",
      "links": [{"label": "Website", "url": "https://example.com"}],
      "marketplaces": [{"name": "Gamma", "url": "https://gamma.io"}],
-     "collections": [
-         {"id": "picks", "name": "Jane Picks", "chain": "Bitcoin", "year": "2023-25", "pieces": 6, "marketplace_name": "", "marketplace_url": ""},
-     ]},
+     "cols": [("picks", "Jane Picks", "Bitcoin", "2023-25", 6, "", "")]},
     {"handle": "ord_whale", "name": "ORDWHALE", "type": "collector", "verified": True,
      "bio": "Long-term holder. Builder of tools for the space. Profile over plumbing.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "Tools", "url": "https://example.com"}, {"label": "Discord", "url": "https://discord.com"}],
      "marketplaces": [{"name": "Magic Eden", "url": "https://magiceden.io"}, {"name": "OpenSea", "url": "https://opensea.io"}],
-     "collections": [
-         {"id": "deep", "name": "Deep Holdings", "chain": "Mixed", "year": "2021-25", "pieces": 8, "marketplace_name": "Magic Eden", "marketplace_url": "https://magiceden.io"},
-     ]},
+     "cols": [("deep", "Deep Holdings", "Mixed", "2021-25", 8, "Magic Eden", "https://magiceden.io")]},
 ]
 
 
 @app.on_event("startup")
-async def seed_demo():
+async def startup():
+    try:
+        init_storage()
+        logger.info("Storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+
     count = await db.users.count_documents({})
     if count == 0:
         for d in DEMO:
+            cols = []
+            for cid, cname, chain, year, n, mname, murl in d["cols"]:
+                cols.append({
+                    "id": cid, "name": cname, "chain": chain, "year": year,
+                    "marketplace_name": mname, "marketplace_url": murl,
+                    "works": build_demo_works(d["handle"] + cid, n),
+                })
             await db.users.insert_one({
-                "id": str(uuid.uuid4()),
-                "twitter_id": f"demo-{d['handle']}",
-                "demo": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                **d,
+                "id": str(uuid.uuid4()), "twitter_id": f"demo-{d['handle']}", "demo": True,
+                "handle": d["handle"], "name": d["name"], "type": d["type"],
+                "verified": d["verified"], "bio": d["bio"],
+                "avatar": art_uri(d["handle"] + "-av"),
+                "links": d["links"], "marketplaces": d["marketplaces"],
+                "collections": cols, "created_at": datetime.now(timezone.utc).isoformat(),
             })
         logger.info("Seeded demo profiles")
 
