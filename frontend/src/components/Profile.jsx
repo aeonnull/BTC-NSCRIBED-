@@ -39,7 +39,7 @@ export default function Profile() {
         <div className="profile">
           <Thumb src={p.avatar} className="pf-avatar" />
           <div className="pf-meta">
-            <div className="pf-type">{p.type}{p.holder && <span className="holder-badge" data-testid="holder-badge">✦ Verified holder</span>}</div>
+            <div className="pf-type">{p.type}</div>
             <div className="pf-name" data-testid="profile-name">{p.name}{p.verified && <Verified size={26} />}</div>
             <a className="pf-handle" href={`https://x.com/${p.handle}`} target="_blank" rel="noreferrer" data-testid="profile-x-link">
               <XLogo style={{ width: 15, height: 15, fill: "var(--cream)" }} /> @{p.handle}

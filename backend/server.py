@@ -31,6 +31,8 @@ SESSION_SECRET = os.environ.get('SESSION_SECRET', 'dev-session')
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
+HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
 
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "nscribed"
@@ -219,7 +221,65 @@ async def twitter_callback(request: Request):
 
 @api_router.get("/auth/me")
 async def auth_me(user: dict = Depends(get_current_user)):
-    return public_profile(user)
+    data = public_profile(user)
+    data["holder"] = bool(user.get("holder", False))
+    data["holder_verified_at"] = user.get("holder_verified_at")
+    return data
+
+
+# ---------- Holder verification (connects to external verifier app) ----------
+def make_state_token(user_id: str) -> str:
+    payload = {"sub": user_id, "typ": "holder_state",
+               "exp": datetime.now(timezone.utc) + timedelta(minutes=15)}
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+@api_router.get("/holder/status")
+async def holder_status(user: dict = Depends(get_current_user)):
+    return {"holder": bool(user.get("holder", False)),
+            "holder_verified_at": user.get("holder_verified_at"),
+            "configured": bool(HOLDER_VERIFY_URL)}
+
+
+@api_router.post("/holder/start")
+async def holder_start(user: dict = Depends(get_current_user)):
+    """Hand the user off to the external holder-verification app (friend's app).
+    We pass a short-lived signed `state` token + a `return_url` to come back to."""
+    if not HOLDER_VERIFY_URL:
+        raise HTTPException(status_code=503, detail="Holder verification not configured yet")
+    state = make_state_token(user["id"])
+    return_url = f"{APP_BASE_URL}/api/holder/callback"
+    sep = "&" if "?" in HOLDER_VERIFY_URL else "?"
+    redirect_url = (f"{HOLDER_VERIFY_URL}{sep}state={state}"
+                    f"&return_url={return_url}&handle={user.get('handle','')}")
+    return {"redirect_url": redirect_url}
+
+
+@api_router.get("/holder/callback")
+async def holder_callback(state: str = "", result: str = "", secret: str = "",
+                          wallet: str = ""):
+    """Called/redirected to by the external verifier app once it has checked the
+    wallet + Ordinals holdings. Expected contract (adjustable to the friend's app):
+      GET /api/holder/callback?state=<token>&result=verified&secret=<shared>&wallet=<addr>
+    """
+    target = f"{APP_BASE_URL}/access"
+    if HOLDER_SHARED_SECRET and secret != HOLDER_SHARED_SECRET:
+        return RedirectResponse(f"{target}?holder=error")
+    try:
+        payload = jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
+        assert payload.get("typ") == "holder_state"
+        user_id = payload["sub"]
+    except Exception:
+        return RedirectResponse(f"{target}?holder=error")
+
+    verified = result.lower() in ("verified", "true", "ok", "1")
+    update = {"holder": verified}
+    if verified:
+        update["holder_verified_at"] = datetime.now(timezone.utc).isoformat()
+        if wallet:
+            update["holder_wallet"] = wallet
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    return RedirectResponse(f"{target}?holder={'ok' if verified else 'failed'}")
 
 
 # ---------- Upload / files ----------

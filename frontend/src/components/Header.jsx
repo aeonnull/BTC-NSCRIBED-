@@ -17,6 +17,7 @@ export default function Header() {
           {user ? (
             <>
               <span className="lnk ghost-only" data-testid="nav-edit" onClick={() => navigate("/edit")}>Edit profile</span>
+              <span className="lnk ghost-only" data-testid="nav-access" onClick={() => navigate("/access")}>Get access</span>
               <span className="lnk" data-testid="nav-myprofile" onClick={() => navigate(`/${user.handle}`)}>@{user.handle}</span>
               <span className="lnk" data-testid="nav-logout" onClick={() => { logout(); navigate("/"); }}>Log out</span>
               <div className="avatar-mini" style={user.avatar ? { backgroundImage: `url("${user.avatar}")` } : { background: "var(--bg-2)" }} onClick={() => navigate("/edit")} />

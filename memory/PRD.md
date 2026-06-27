@@ -2,42 +2,53 @@
 
 ## Original problem statement
 Visual "Link Tree" for crypto/Ordinals art. Twitter/X integration is fundamental.
-Replace "Magic Eden" (no longer exists) with free-form "Marketplaces" where users enter
-the marketplace name + a link. Source was a single static HTML file (provided by user).
+Replace "Magic Eden" with free-form "Marketplaces" (user enters name + link).
+Later: gate access by proving ownership of a specific Ordinal (holder verification),
+delegated to a friend's ("Hamad's") external verifier app — no wallets inside nscribed.
 
 ## User choices (confirmed)
 - Fullstack app (React + FastAPI + MongoDB)
-- Real X/Twitter API login (OAuth 1.0a "Sign in with X")
-- Marketplaces: user types name + link freely (multiple)
-- Users create/edit their own profiles (auth via X login)
-- Keep the generated SVG placeholder art
+- Real X/Twitter OAuth 1.0a login (app "Nscribed", id 32438062)
+- Marketplaces: free-form name + link (profile-level + per-collection)
+- Users create/edit their own profiles after X login
+- Image upload: profile avatar + EVERY artwork individually; uploaded images only
+  (no generated-art fallback for real users; demo profiles use baked generated SVG art)
+- Pretty share links: `domain/<handle>` + copy button
+- Remove all Emergent traces (done)
+- Holder verification: connect to EXTERNAL friend's app (no wallet libs in nscribed)
 
 ## Architecture
-- Backend: FastAPI (/api prefix), MongoDB (motor). Authlib OAuth 1.0a + SessionMiddleware.
-  JWT (pyjwt) issued after X login; 30-day token in localStorage on frontend.
-- Frontend: React Router. Ported original design 1:1 into App.css. AuthContext in auth.js.
-  Seeded generative art in lib/art.js.
-- X app: "Nscribed" (app id 32438062). Keys in backend/.env. Callback:
-  {APP_BASE_URL}/api/auth/twitter/callback (Web App / Confidential client).
+- Backend FastAPI (/api), MongoDB (motor). Authlib OAuth1 + SessionMiddleware; JWT (pyjwt).
+- Object storage via Emergent objstore (EMERGENT_LLM_KEY). Files served at /api/files/{path}.
+- Frontend React Router. Routes: / , /edit , /access , /auth/callback , /:handle , /:handle/c/:cid
+- Art generation ported to Python (art.py) only for seeding demo content.
 
 ## Key endpoints
-- GET  /api/auth/twitter/login        -> 302 to X authorize
-- GET  /api/auth/twitter/callback     -> creates/updates user, redirects /auth/callback?token=
-- GET  /api/auth/me                   -> current user (Bearer JWT)
-- GET  /api/profiles                  -> {artists[], collectors[]}
-- GET  /api/profiles/{handle}         -> single public profile
-- PUT  /api/profiles/me               -> update name/type/bio/links/marketplaces/collections
+- GET /api/auth/twitter/login | /callback ; GET /api/auth/me (returns holder flag, private)
+- GET /api/profiles ; GET /api/profiles/{handle} (public; does NOT expose holder)
+- PUT /api/profiles/me (name/type/bio/avatar/links/marketplaces/collections+works)
+- POST /api/upload (auth, image) -> {path,url} ; GET /api/files/{path} (public)
+- GET /api/holder/status (auth) ; POST /api/holder/start (auth) ; GET /api/holder/callback
+
+## Holder verification — integration contract (for friend's app)
+Not configured until env set: HOLDER_VERIFY_URL, HOLDER_SHARED_SECRET (backend/.env).
+1. nscribed -> friend app:  GET {HOLDER_VERIFY_URL}?state=<jwt>&return_url={base}/api/holder/callback&handle=<x_handle>
+2. friend app verifies wallet + Ordinal holdings (their side)
+3. friend app -> nscribed:  GET {base}/api/holder/callback?state=<same jwt>&result=verified&secret=<shared>&wallet=<addr>
+   -> sets user.holder=true, redirects to /access?holder=ok
+state = short-lived (15 min) signed JWT identifying the nscribed user.
 
 ## Implemented (2026-06-27)
-- Home (artists + collectors grid), Profile (links + marketplaces chips), Collection detail
-  with manifest + works grid + lightbox. All matching original aesthetic.
-- "Magic Eden" replaced by editable Marketplaces (profile-level list + per-collection name+link).
-- Real X login redirect verified (302 to api.twitter.com). Protected endpoints + 401 gating verified.
-- Edit dashboard: name, artist/collector toggle, bio, links, marketplaces, collections (pieces count).
-- 7 demo profiles seeded on first startup.
+- Home/Profile/Collection/Lightbox/Footer ported from user's design + Edit dashboard.
+- Marketplaces editable (replaces Magic Eden). Real X login verified (redirect to X works).
+- Image upload (avatar + per-artwork) verified end-to-end. Clean /handle links + copy button.
+- Emergent badge + posthog tracking removed from index.html.
+- Holder-verification SEAM prepared (endpoints + /access page) with env placeholders;
+  returns 503/"coming soon" until friend's app URL + shared secret are set.
 
 ## Backlog / Next
-- P1: Confirm full X login round-trip with a real account (user to verify in browser).
-- P1: Allow real image upload for avatar/works (currently generated art per user choice).
-- P2: Profile slug sharing / copy-link button, search, About/Support pages.
-- P2: Replace SESSION_SECRET/JWT_SECRET with longer (32+ byte) production secrets before deploy.
+- Connect friend's verifier app: set HOLDER_VERIFY_URL + HOLDER_SHARED_SECRET, confirm callback params.
+- Future: second access path = pay (paywall) in addition to holding an Ordinal.
+- Confirm full X login round-trip with a real account (browser).
+- Before deploy: longer (32+ byte) JWT_SECRET/SESSION_SECRET.
+- Push to GitHub via the "Save to Github" button in the chat input (not done by agent).
