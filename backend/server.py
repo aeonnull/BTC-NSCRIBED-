@@ -372,8 +372,8 @@ DEMO = [
     {"handle": "runeandco", "name": "RUNE&CO", "type": "artist", "verified": True,
      "bio": "A studio inscribing type and glyphs. Everything is a manifest.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "X", "url": "https://x.com"}],
-     "marketplaces": [{"name": "Magic Eden", "url": "https://magiceden.io"}],
-     "cols": [("glyphs", "Glyphset", "Bitcoin", "2024", 8, "Magic Eden", "https://magiceden.io")]},
+     "marketplaces": [{"name": "Gamma", "url": "https://gamma.io"}],
+     "cols": [("glyphs", "Glyphset", "Bitcoin", "2024", 8, "", "https://gamma.io")]},
     {"handle": "kane_eth", "name": "0xKANE", "type": "collector", "verified": True,
      "bio": "Collecting on-chain art across Bitcoin and Ethereum. Curating, not flexing the whole wallet.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "Discord", "url": "https://discord.com"}],
@@ -387,8 +387,8 @@ DEMO = [
     {"handle": "ord_whale", "name": "ORDWHALE", "type": "collector", "verified": True,
      "bio": "Long-term holder. Builder of tools for the space. Profile over plumbing.",
      "links": [{"label": "Website", "url": "https://example.com"}, {"label": "Tools", "url": "https://example.com"}, {"label": "Discord", "url": "https://discord.com"}],
-     "marketplaces": [{"name": "Magic Eden", "url": "https://magiceden.io"}, {"name": "OpenSea", "url": "https://opensea.io"}],
-     "cols": [("deep", "Deep Holdings", "Mixed", "2021-25", 8, "Magic Eden", "https://magiceden.io")]},
+     "marketplaces": [{"name": "Ordinals Wallet", "url": "https://ordinalswallet.com"}, {"name": "OpenSea", "url": "https://opensea.io"}],
+     "cols": [("deep", "Deep Holdings", "Mixed", "2021-25", 8, "", "https://ordinalswallet.com")]},
 ]
 
 

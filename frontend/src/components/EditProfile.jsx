@@ -169,7 +169,7 @@ export default function EditProfile() {
                 <input className="inp" placeholder="Year (e.g. 2025)" data-testid={`col-year-${i}`} value={c.year} onChange={(e) => updCol(i, "year", e.target.value)} />
               </div>
               <div className="mkt-row">
-                <input className="inp" placeholder="Marketplace link — e.g. https://magiceden.io/... (where this collection lives)" data-testid={`col-mkt-url-${i}`} value={c.marketplace_url} onChange={(e) => updCol(i, "marketplace_url", e.target.value)} />
+                <input className="inp" placeholder="Marketplace link (paste the link where this collection lives)" data-testid={`col-mkt-url-${i}`} value={c.marketplace_url} onChange={(e) => updCol(i, "marketplace_url", e.target.value)} />
                 <input className="inp mkt-name-inp" placeholder="Name (optional — auto from link)" data-testid={`col-mkt-name-${i}`} value={c.marketplace_name} onChange={(e) => updCol(i, "marketplace_name", e.target.value)} />
               </div>
               {c.marketplace_url && (
