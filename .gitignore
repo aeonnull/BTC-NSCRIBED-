@@ -89,3 +89,7 @@ credentials.json
 
 # Emergent platform artifacts (excluded — deploying on own infrastructure)
 .emergent/
+
+# Internal project notes & QA artifacts (kept out of the public repo)
+memory/
+test_reports/
