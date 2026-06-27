@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, uploadImage } from "../api";
 import { useAuth } from "../auth";
 import { XLogo } from "../lib/icons";
+import { marketLabel } from "../lib/marketplace";
 
 const Trash = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
@@ -156,18 +157,6 @@ export default function EditProfile() {
         </div>
 
         <div className="field">
-          <label>Marketplaces</label>
-          {form.marketplaces.map((m, i) => (
-            <div className="row-pair" key={i}>
-              <input className="inp" placeholder="Marketplace name (e.g. OpenSea)" data-testid={`mkt-name-${i}`} value={m.name} onChange={(e) => updItem("marketplaces", i, "name", e.target.value)} />
-              <input className="inp" placeholder="https://…" data-testid={`mkt-url-${i}`} value={m.url} onChange={(e) => updItem("marketplaces", i, "url", e.target.value)} />
-              <button className="del-btn" data-testid={`mkt-del-${i}`} onClick={() => delItem("marketplaces", i)}><Trash /></button>
-            </div>
-          ))}
-          <button className="add-btn" data-testid="add-marketplace" onClick={() => addItem("marketplaces", { name: "", url: "" })}>+ Add marketplace</button>
-        </div>
-
-        <div className="field">
           <label>Collections</label>
           {form.collections.map((c, i) => (
             <div className="col-edit" key={c.id} data-testid={`col-edit-${i}`}>
@@ -178,9 +167,14 @@ export default function EditProfile() {
               <div className="grid2">
                 <input className="inp" placeholder="Chain (e.g. Bitcoin)" data-testid={`col-chain-${i}`} value={c.chain} onChange={(e) => updCol(i, "chain", e.target.value)} />
                 <input className="inp" placeholder="Year (e.g. 2025)" data-testid={`col-year-${i}`} value={c.year} onChange={(e) => updCol(i, "year", e.target.value)} />
-                <input className="inp" placeholder="Marketplace name" data-testid={`col-mkt-name-${i}`} value={c.marketplace_name} onChange={(e) => updCol(i, "marketplace_name", e.target.value)} />
-                <input className="inp" placeholder="Marketplace link (https://…)" data-testid={`col-mkt-url-${i}`} value={c.marketplace_url} onChange={(e) => updCol(i, "marketplace_url", e.target.value)} />
               </div>
+              <div className="mkt-row">
+                <input className="inp" placeholder="Marketplace link — e.g. https://magiceden.io/... (where this collection lives)" data-testid={`col-mkt-url-${i}`} value={c.marketplace_url} onChange={(e) => updCol(i, "marketplace_url", e.target.value)} />
+                <input className="inp mkt-name-inp" placeholder="Name (optional — auto from link)" data-testid={`col-mkt-name-${i}`} value={c.marketplace_name} onChange={(e) => updCol(i, "marketplace_name", e.target.value)} />
+              </div>
+              {c.marketplace_url && (
+                <div className="mkt-preview" data-testid={`col-mkt-preview-${i}`}>Shows as: <b>on {marketLabel(c.marketplace_url, c.marketplace_name)} ↗</b></div>
+              )}
 
               <div className="works-edit">
                 {(c.works || []).map((w, wi) => (

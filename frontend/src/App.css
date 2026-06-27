@@ -131,6 +131,14 @@ nav.top .lnk:hover{color:var(--cream)}
 .card .cname{font-family:var(--sans);font-weight:700;font-size:17px;color:var(--cream);text-transform:uppercase;letter-spacing:.02em}
 .card .cmeta{margin-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;display:flex;gap:10px;flex-wrap:wrap}
 .card .cmeta b{color:var(--orange-dim);font-weight:400}
+.on-market{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--orange);transition:.15s}
+.on-market:hover{filter:brightness(1.15);text-decoration:underline}
+.on-market .ar{color:var(--orange)}
+.mkt-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.mkt-row .inp{flex:1;min-width:200px}
+.mkt-row .mkt-name-inp{flex:none;width:230px;max-width:100%}
+.mkt-preview{margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.04em}
+.mkt-preview b{color:var(--orange);text-transform:uppercase;font-weight:400}
 
 /* collection detail */
 .col-head{padding:18px 0 4px}

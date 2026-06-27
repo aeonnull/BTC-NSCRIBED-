@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { Verified, XLogo } from "../lib/icons";
+import { marketLabel } from "../lib/marketplace";
 
 function Thumb({ src, className }) {
   return <div className={className} style={src ? { backgroundImage: `url("${src}")` } : { background: "var(--bg-2)" }} />;
@@ -64,19 +65,6 @@ export default function Profile() {
                 </div>
               </>
             )}
-
-            {p.marketplaces?.length > 0 && (
-              <>
-                <div className="subhead">Marketplaces</div>
-                <div className="links" data-testid="profile-marketplaces">
-                  {p.marketplaces.map((m, i) => (
-                    <a key={i} className="chip mkt" href={m.url} target="_blank" rel="noreferrer" data-testid={`marketplace-${i}`}>
-                      {m.name}<span className="ar">&#8599;</span>
-                    </a>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
         </div>
 
@@ -97,6 +85,12 @@ export default function Profile() {
                     <div className="cmeta">
                       <span><b>{c.chain}</b></span><span><b>{c.year}</b></span><span>{(c.works || []).length} pcs</span>
                     </div>
+                    {c.marketplace_url && (
+                      <a className="on-market" href={c.marketplace_url} target="_blank" rel="noreferrer"
+                        data-testid={`collection-market-${c.id}`} onClick={(e) => e.stopPropagation()}>
+                        on {marketLabel(c.marketplace_url, c.marketplace_name)} <span className="ar">&#8599;</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}

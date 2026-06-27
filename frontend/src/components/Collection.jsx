@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { marketLabel } from "../lib/marketplace";
 
 function Thumb({ src, className, onClick, ...rest }) {
   return <div className={className} onClick={onClick} style={src ? { backgroundImage: `url("${src}")` } : { background: "var(--bg-2)" }} {...rest} />;
@@ -51,7 +52,7 @@ export default function Collection() {
               <span className="k">Marketplace</span><span className="dots"></span>
               {c.marketplace_url ? (
                 <a className="v mk" href={c.marketplace_url} target="_blank" rel="noreferrer" data-testid="collection-marketplace">
-                  {c.marketplace_name || "View"} &#8599;
+                  {marketLabel(c.marketplace_url, c.marketplace_name)} &#8599;
                 </a>
               ) : (<span className="v" style={{ color: "var(--muted)" }}>—</span>)}
             </div>
