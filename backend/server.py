@@ -30,7 +30,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'dev-session')
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+STORAGE_API_KEY = os.environ.get('STORAGE_API_KEY', '')
 HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
 HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
 REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'false').lower() in ('1', 'true', 'yes')
@@ -66,7 +66,7 @@ def init_storage():
     global _storage_key
     if _storage_key:
         return _storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": STORAGE_API_KEY}, timeout=30)
     resp.raise_for_status()
     _storage_key = resp.json()["storage_key"]
     return _storage_key

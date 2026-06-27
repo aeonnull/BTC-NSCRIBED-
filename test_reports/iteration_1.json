@@ -1,0 +1,42 @@
+{
+  "summary": "Full backend + frontend test of nscribed. 15/15 backend pytest cases passed. All key UI flows verified: public profile viewing, ownership-only edits, public file fetch, holder gate (unconfigured), auth gating of /edit and /access, lightbox on works, clean /<handle> URLs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Profile page (/btc_mio)", "issues": ["Collection cards (CHAOS/PUNK ROYALE/NODEBIRDS) and work tiles are missing data-testid and not exposed as <a>/<button> with role; only the inner card div has cursor:pointer. Functional click works fine, but automated testing requires DOM coordinate clicks. Recommend adding data-testid='collection-card-<id>' and data-testid='work-tile-<id>' for testability."]},
+      {"screen": "Home page tiles", "issues": ["Same testability gap on profile tiles — they navigate via JS onClick instead of <a href>. Adding data-testid='profile-tile-<handle>' (or wrapping in <Link>) would help."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional / low priority) Add data-testid attributes to home profile tiles, collection cards, and work tiles to improve automated UI testability. No functional bugs found.",
+    "(Optional) Wrap collection/work cards in semantic <a>/<button> for accessibility + clean SSR href crawling."
+  ],
+  "critical_code_review_comments": [
+    "Backend public_profile() correctly excludes 'holder' field – verified via tests on /api/profiles and /api/profiles/{handle}.",
+    "PUT /api/profiles/me derives identity from JWT only — there is no /profiles/{handle} or /profiles/{id} PUT endpoint, so cross-user edits are structurally impossible. Confirmed by tests.",
+    "Upload endpoint correctly enforces auth (401), validates content-type prefix image/ (400 for text/plain), and stores objects under per-user path APP_NAME/uploads/<user_id>/<uuid>.<ext>. GET /api/files/<path> is public and returns the stored content-type with long-cache header.",
+    "REQUIRE_HOLDER flag is currently false in /app/backend/.env, so testartist (holder=false) was able to edit. If REQUIRE_HOLDER is flipped to true, /profiles/me will 403 until /api/holder/callback flips holder=true – this branch is unit-tested implicitly via env config but not via an E2E flow because HOLDER_VERIFY_URL is intentionally empty.",
+    "Footer (Header.jsx/Footer.jsx) contains x.com/nscribed and nscribed.xyz links; no 'Made with Emergent' badge or posthog scripts found in rendered HTML.",
+    "Minor: server.py uses @app.on_event('startup') / 'shutdown' which is deprecated in FastAPI; consider migrating to lifespan context manager."
+  ],
+  "updated_files": [
+    "/app/backend/tests/__init__.py (new)",
+    "/app/backend/tests/backend_test.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "testartist JWT (30-day) from /app/memory/test_credentials.md – used for authed flows.",
+  "seed_data_creation": "testartist profile was edited via PUT /api/profiles/me during ownership test (name='TEST Artist', bio='TEST_bio updated by testartist suite', marketplaces=[OpenSea]). One small PNG was uploaded under nscribed/uploads/<testartist_id>/<uuid>.png. Demo profile btc_mio was verified to be unchanged.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite at /app/backend/tests/backend_test.py covers: public profile listing/get (no holder leak), edit auth gating (401), ownership-only edits, upload + public file fetch, holder gate (configured=false, /start=503), /auth/me. Run with: REACT_APP_BACKEND_URL=<url> pytest backend/tests/backend_test.py -v --junitxml=/app/test_reports/pytest/pytest_results.xml. The testartist profile mutates between runs – tests don't assume initial state. Card-level UI clicks (collection/work) work only via coordinate clicks until data-testid is added.",
+  "rca of the issue": "No defects found. Edit-flow ownership, public/private boundary on holder field, upload auth requirement, public file serving, holder 503-when-unconfigured, and auth gating on /edit & /access all behave as specified."
+}

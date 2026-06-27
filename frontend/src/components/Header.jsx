@@ -14,6 +14,7 @@ export default function Header() {
           <span className="by">// by blockheads</span>
         </div>
         <nav className="top">
+          <a className="lnk ghost-only" href="https://x.com/nscribed" target="_blank" rel="noreferrer" data-testid="nav-support">Support</a>
           {user ? (
             <>
               <span className="lnk ghost-only" data-testid="nav-edit" onClick={() => navigate("/edit")}>Edit profile</span>
