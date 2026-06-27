@@ -12,11 +12,14 @@ function Thumb({ src, className }) {
 
 function PersonTile({ p, onClick }) {
   return (
-    <div className="person" data-testid={`person-${p.handle}`} onClick={onClick} tabIndex={0} role="button" onKeyDown={(e) => e.key === "Enter" && onClick()}>
+    <div className={`person ${p.type}`} data-testid={`person-${p.handle}`} onClick={onClick} tabIndex={0} role="button" onKeyDown={(e) => e.key === "Enter" && onClick()}>
       <Thumb src={p.avatar} className="pa" />
       <div className="pi">
         <div className="pname">{p.name}{p.verified && <Verified />}</div>
-        <div className="phandle">@{p.handle}</div>
+        <div className="prow">
+          <span className="phandle">@{p.handle}</span>
+          <span className="prole" data-testid={`role-${p.handle}`}>{p.type}</span>
+        </div>
       </div>
     </div>
   );
@@ -43,7 +46,7 @@ export default function Home() {
         <div className="hero">
           <span className="eyebrow"><span className="slash">//</span> nscribed — by blockheads</span>
           <h1>One link for everything you've <em>inscribed</em>.</h1>
-          <p className="sub">A profile home for Ordinals artists and collectors. Show your work, your collections, your marketplaces — then drop one clean address in your X bio.</p>
+          <p className="sub">A profile home for digital art collectors and creators — <b>Bitcoin Ordinals first, every chain welcome</b>. Show your work, your collections, your marketplaces, then drop one clean link in your X bio.</p>
           <div className="req"><span className="dot"></span> the only thing we require is your <b>X account</b> — everything else is yours to choose</div>
           {!user && (
             <div style={{ marginTop: 24 }}>
@@ -56,7 +59,7 @@ export default function Home() {
       <div className="wrap">
         <div className="sec">
           <div className="sec-head">
-            <h2><span className="idx">01</span> Artists</h2>
+            <h2><span className="idx">01</span> <span className="sec-tag fill">Artists</span></h2>
             <span className="count">{pad(artists.length)} profiles</span>
           </div>
           {artists.length ? (
@@ -68,7 +71,7 @@ export default function Home() {
 
         <div className="sec">
           <div className="sec-head">
-            <h2><span className="idx">02</span> Collectors</h2>
+            <h2><span className="idx">02</span> <span className="sec-tag inv">Collectors</span></h2>
             <span className="count">{pad(collectors.length)} profiles</span>
           </div>
           {collectors.length ? (
