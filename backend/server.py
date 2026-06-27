@@ -287,10 +287,12 @@ async def download(file_id: str):
 # ---------- Profile routes ----------
 @api_router.get("/profiles")
 async def list_profiles():
-    users = await db.users.find({}, {"_id": 0}).to_list(1000)
-    artists = [public_profile(u) for u in users if u.get("type") == "artist"]
-    collectors = [public_profile(u) for u in users if u.get("type") == "collector"]
-    return {"artists": artists, "collectors": collectors}
+    artist_docs = await db.users.find({"type": "artist"}, {"_id": 0}).to_list(500)
+    collector_docs = await db.users.find({"type": "collector"}, {"_id": 0}).to_list(500)
+    return {
+        "artists": [public_profile(u) for u in artist_docs],
+        "collectors": [public_profile(u) for u in collector_docs],
+    }
 
 
 @api_router.get("/profiles/{handle}")
