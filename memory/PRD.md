@@ -41,7 +41,11 @@ Set in backend/.env when connecting: HOLDER_VERIFY_URL, HOLDER_SHARED_SECRET, RE
 - QA: 15/15 backend + 100% frontend passed (test suite at backend/tests/backend_test.py).
 
 ## Next / Backlog
-- USER ACTION: push to GitHub via the "Save to Github" button in the chat input.
+- DEPLOY-READY (2026-06-27): deployment health check PASSED. Fixed: removed .env from
+  .gitignore (needed for Emergent deploy), optimized /api/profiles to two type-filtered queries.
+- Added social share card: /public/og.png + Open Graph/Twitter meta tags in index.html
+  (og:image -> https://nscribed.xyz/og.png). Professional README.md added.
+- USER ACTION: push to GitHub via the "Save to Github" button.
 - USER ACTION: deploy + connect domain nscribed.xyz (Deploy feature). After deploy:
   update APP_BASE_URL + REACT_APP_BACKEND_URL to the live domain, and add the production
   callback URL `https://<domain>/api/auth/twitter/callback` to the X app settings.
