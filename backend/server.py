@@ -33,6 +33,7 @@ TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
 HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
+REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'false').lower() in ('1', 'true', 'yes')
 
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "nscribed"
@@ -340,6 +341,9 @@ async def get_profile(handle: str):
 
 @api_router.put("/profiles/me")
 async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
+    # Membership gate: when enabled, only verified holders may create/edit a profile.
+    if REQUIRE_HOLDER and not user.get("holder", False):
+        raise HTTPException(status_code=403, detail="Holder verification required to create or edit a profile")
     update = {}
     if payload.name is not None:
         update["name"] = payload.name

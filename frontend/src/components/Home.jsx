@@ -46,7 +46,7 @@ export default function Home() {
         <div className="hero">
           <span className="eyebrow"><span className="slash">//</span> nscribed — by blockheads</span>
           <h1>One link for all your <em>digital art</em>.</h1>
-          <p className="sub">A home for creators and collectors. Show everything you've made and everything you've collected — any chain, one clean link for your X bio.</p>
+          <p className="sub">Whether you create it or collect it — show your digital art in one place, then drop a single clean link in your X bio.</p>
           <div className="req"><span className="dot"></span> the only thing we require is your <b>X account</b> — everything else is yours to choose</div>
           {!user && (
             <div style={{ marginTop: 24 }}>
