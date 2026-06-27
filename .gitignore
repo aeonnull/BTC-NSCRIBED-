@@ -90,3 +90,6 @@ credentials.json
 # Internal project notes & QA artifacts (kept out of the public repo)
 memory/
 test_reports/
+.env
+.env.*
+*.env

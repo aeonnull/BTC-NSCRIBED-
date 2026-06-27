@@ -1,0 +1,10 @@
+**/node_modules
+**/build
+**/.env
+.git
+.emergent
+memory
+test_reports
+**/__pycache__
+*.pyc
+.venv
