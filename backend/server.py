@@ -36,6 +36,7 @@ HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
 REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'false').lower() in ('1', 'true', 'yes')
 
 APP_NAME = "nscribed"
+DEMO_REMOVE_THRESHOLD = 10  # demo profiles auto-clear once this many real users join
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -193,6 +194,11 @@ async def twitter_callback(oauth_token: str = "", oauth_verifier: str = ""):
             "type": "artist", "bio": "", "links": [], "marketplaces": [],
             "collections": [], "created_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    # Auto-remove demo/example profiles once enough real users have joined.
+    real_count = await db.users.count_documents({"demo": {"$ne": True}})
+    if real_count >= DEMO_REMOVE_THRESHOLD:
+        await db.users.delete_many({"demo": True})
 
     jwt_token = make_token(user_id)
     return RedirectResponse(f"{APP_BASE_URL}/auth/callback?token={jwt_token}")
