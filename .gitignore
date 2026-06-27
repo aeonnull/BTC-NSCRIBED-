@@ -86,3 +86,6 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Emergent platform artifacts (excluded — deploying on own infrastructure)
+.emergent/
