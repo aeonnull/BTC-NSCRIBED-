@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
 from pydantic import BaseModel, Field
-from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.httpx_client import AsyncOAuth1Client
 
 from art import art_uri, build_demo_works
 
@@ -45,17 +45,11 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 api_router = APIRouter(prefix="/api")
 
-# ---------- OAuth (Twitter / X) ----------
-oauth = OAuth()
-oauth.register(
-    name='twitter',
-    client_id=TWITTER_API_KEY,
-    client_secret=TWITTER_API_SECRET,
-    request_token_url='https://api.twitter.com/oauth/request_token',
-    access_token_url='https://api.twitter.com/oauth/access_token',
-    authorize_url='https://api.twitter.com/oauth/authenticate',
-    api_base_url='https://api.twitter.com/1.1/',
-)
+# ---------- OAuth (Twitter / X) — DB-backed, no session/cookie dependency ----------
+TW_REQUEST_TOKEN_URL = 'https://api.twitter.com/oauth/request_token'
+TW_AUTHORIZE_URL = 'https://api.twitter.com/oauth/authenticate'
+TW_ACCESS_TOKEN_URL = 'https://api.twitter.com/oauth/access_token'
+TW_VERIFY_URL = 'https://api.twitter.com/1.1/account/verify_credentials.json'
 
 MIME_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
@@ -137,29 +131,49 @@ def public_profile(u: dict) -> dict:
 
 # ---------- Auth routes ----------
 @api_router.get("/auth/twitter/login")
-async def twitter_login(request: Request):
+async def twitter_login():
     if not TWITTER_API_KEY or not TWITTER_API_SECRET:
         raise HTTPException(status_code=503, detail="Twitter login not configured")
-    redirect_uri = f"{APP_BASE_URL}/api/auth/twitter/callback"
-    return await oauth.twitter.authorize_redirect(request, redirect_uri)
+    callback = f"{APP_BASE_URL}/api/auth/twitter/callback"
+    async with AsyncOAuth1Client(TWITTER_API_KEY, TWITTER_API_SECRET, redirect_uri=callback) as client:
+        token = await client.fetch_request_token(TW_REQUEST_TOKEN_URL)
+    await db.oauth_tmp.update_one(
+        {"oauth_token": token["oauth_token"]},
+        {"$set": {"oauth_token_secret": token["oauth_token_secret"],
+                  "created_dt": datetime.now(timezone.utc),
+                  "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return RedirectResponse(f"{TW_AUTHORIZE_URL}?oauth_token={token['oauth_token']}")
 
 
 @api_router.get("/auth/twitter/callback")
-async def twitter_callback(request: Request):
+async def twitter_callback(oauth_token: str = "", oauth_verifier: str = ""):
+    tmp = await db.oauth_tmp.find_one({"oauth_token": oauth_token})
+    if not tmp or not oauth_verifier:
+        logger.error("Twitter callback missing request token or verifier")
+        return RedirectResponse(f"{APP_BASE_URL}/?auth=error")
     try:
-        token = await oauth.twitter.authorize_access_token(request)
-        resp = await oauth.twitter.get(
-            'account/verify_credentials.json',
-            params={'skip_status': 'true', 'include_email': 'false'},
-            token=token,
-        )
-        data = resp.json()
+        async with AsyncOAuth1Client(
+            TWITTER_API_KEY, TWITTER_API_SECRET,
+            token=oauth_token, token_secret=tmp["oauth_token_secret"],
+        ) as client:
+            access = await client.fetch_access_token(TW_ACCESS_TOKEN_URL, verifier=oauth_verifier)
+        async with AsyncOAuth1Client(
+            TWITTER_API_KEY, TWITTER_API_SECRET,
+            token=access["oauth_token"], token_secret=access["oauth_token_secret"],
+        ) as client:
+            resp = await client.get(TW_VERIFY_URL,
+                                    params={"skip_status": "true", "include_email": "false"})
+            data = resp.json()
     except Exception as e:
         logger.error(f"Twitter auth failed: {e}")
         return RedirectResponse(f"{APP_BASE_URL}/?auth=error")
+    finally:
+        await db.oauth_tmp.delete_one({"oauth_token": oauth_token})
 
-    twitter_id = str(data.get("id_str") or data.get("id"))
-    handle = data.get("screen_name")
+    twitter_id = str(data.get("id_str") or data.get("id") or access.get("user_id", ""))
+    handle = data.get("screen_name") or access.get("screen_name")
     name = data.get("name") or handle
     avatar = (data.get("profile_image_url_https") or "").replace("_normal", "")
     verified = bool(data.get("verified", False))
@@ -374,6 +388,10 @@ DEMO = [
 
 @app.on_event("startup")
 async def startup():
+    try:
+        await db.oauth_tmp.create_index("created_dt", expireAfterSeconds=900)
+    except Exception as e:
+        logger.warning(f"oauth_tmp TTL index: {e}")
     count = await db.users.count_documents({})
     if count == 0:
         for d in DEMO:
