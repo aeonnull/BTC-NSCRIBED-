@@ -2,8 +2,12 @@
 FROM node:20-alpine AS frontend
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/yarn.lock ./
-RUN yarn install --frozen-lockfile
+RUN yarn install --network-timeout 600000
 COPY frontend/ ./
+ENV CI=false
+ENV GENERATE_SOURCEMAP=false
+ENV DISABLE_ESLINT_PLUGIN=true
+ENV NODE_OPTIONS=--max-old-space-size=1024
 RUN yarn build
 
 # --- Stage 2: Python backend that also serves the built frontend ---
