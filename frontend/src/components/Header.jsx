@@ -10,7 +10,7 @@ export default function Header() {
     <header className="bar">
       <div className="bar-in">
         <div className="brand" data-testid="brand-home" onClick={() => navigate("/")} tabIndex={0} role="button" onKeyDown={(e) => e.key === "Enter" && navigate("/")}>
-          <span className="mark">nscribed</span>
+          <span className="mark">nscribed<img className="splat" src="/splat.png" alt="" /></span>
           <span className="by">// by blockheads</span>
         </div>
         <nav className="top">

@@ -39,7 +39,8 @@
 header.bar{position:sticky;top:0;z-index:40;background:rgba(10,9,8,.78);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .bar-in{max-width:var(--maxw);margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .brand{display:flex;align-items:baseline;gap:9px;cursor:pointer}
-.brand .mark{font-family:var(--mono);font-weight:700;font-size:18px;letter-spacing:.04em;color:var(--cream)}
+.brand .mark{font-family:var(--mono);font-weight:700;font-size:18px;letter-spacing:.04em;color:var(--cream);position:relative;padding-right:18px}
+.brand .mark .splat{position:absolute;right:-12px;top:50%;transform:translateY(-50%) rotate(8deg);width:34px;height:34px;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,106,26,.35))}
 .brand .mark b{color:var(--orange)}
 .brand .by{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;display:none}
 @media(min-width:560px){.brand .by{display:inline}}
