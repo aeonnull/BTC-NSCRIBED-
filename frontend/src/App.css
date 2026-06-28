@@ -157,7 +157,9 @@ nav.top .lnk:hover{color:var(--cream)}
 @media(min-width:900px){.works{grid-template-columns:repeat(4,1fr)}}
 .work{cursor:zoom-in;border:1px solid var(--line);background:var(--bg-2);border-radius:3px;overflow:hidden;transition:border-color .18s}
 .work:hover{border-color:var(--orange)}
+.work .wa-wrap{position:relative}
 .work .wa{aspect-ratio:1;background-size:cover;background-position:center}
+.work .work-like{position:absolute;top:8px;right:8px}
 .work .wc{padding:11px 12px 13px}
 .work .wt{font-family:var(--sans);font-weight:500;font-size:13px;color:var(--cream)}
 .work .wm{margin-top:6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;line-height:1.6}
@@ -172,6 +174,34 @@ nav.top .lnk:hover{color:var(--cream)}
 .lb-mani .kv{font-size:11px}
 .lb-close{flex:none;width:38px;height:38px;border:1px solid var(--line-2);border-radius:50%;display:grid;place-items:center;color:var(--cream);transition:.15s}
 .lb-close:hover{border-color:var(--orange);color:var(--orange);transform:rotate(90deg)}
+.lb-like{margin-top:16px;display:flex;align-items:center;gap:10px}
+.lb-like-hint{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* discovery: latest drops + most appreciated */
+.drops{display:grid;gap:16px;grid-template-columns:repeat(2,1fr)}
+@media(min-width:620px){.drops{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:900px){.drops{grid-template-columns:repeat(4,1fr)}}
+.drop{cursor:pointer;border:1px solid var(--line);background:var(--bg-2);border-radius:3px;overflow:hidden;transition:border-color .18s,transform .18s}
+.drop:hover{border-color:var(--orange);transform:translateY(-3px)}
+.drop-art{position:relative;aspect-ratio:1;background-size:cover;background-position:center}
+.drop-like{position:absolute;top:8px;right:8px}
+.drop-info{padding:11px 12px 13px}
+.drop-title{font-family:var(--sans);font-weight:500;font-size:13px;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drop-row{margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.drop-handle{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;display:flex;align-items:center;gap:4px}
+.drop-role{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;flex:none;padding:3px 7px;border-radius:2px;font-weight:700}
+.drop.artist .drop-role{background:var(--orange);color:#0A0908}
+.drop.collector .drop-role{background:#0A0908;color:var(--orange);border:1px solid var(--orange)}
+
+/* like button (bitcoin coin) */
+.like-btn{display:inline-flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--line-2);background:rgba(10,9,8,.72);backdrop-filter:blur(6px);border-radius:999px;padding:4px 10px 4px 4px;font-family:var(--mono);transition:border-color .16s,background .16s}
+.like-btn:hover{border-color:var(--orange)}
+.like-btn:active{transform:scale(.94)}
+.like-btn .btc-coin{width:19px;height:19px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#3A332C;color:var(--muted);font-weight:700;font-size:11px;line-height:1;transition:background .16s,color .16s}
+.like-btn.liked{border-color:var(--orange)}
+.like-btn.liked .btc-coin{background:var(--orange);color:#0A0908;animation:btcpop .32s ease}
+.like-count{font-size:11px;color:var(--cream);letter-spacing:.04em;min-width:8px;text-align:left}
+@keyframes btcpop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
 
 /* footer */
 footer{margin-top:80px;border-top:1px solid var(--line);padding:46px 0 60px}

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { Verified } from "../lib/icons";
 import { useAuth } from "../auth";
+import { DiscoverTile } from "./DiscoverTile";
 
 function Thumb({ src, className }) {
   return (
@@ -30,12 +31,16 @@ export default function Home() {
   const { user, login } = useAuth();
   const [artists, setArtists] = useState([]);
   const [collectors, setCollectors] = useState([]);
+  const [recent, setRecent] = useState([]);
+  const [top, setTop] = useState([]);
 
   useEffect(() => {
     api.get("/profiles").then(({ data }) => {
       setArtists(data.artists || []);
       setCollectors(data.collectors || []);
     });
+    api.get("/recent?limit=8").then(({ data }) => setRecent(data.works || []));
+    api.get("/top?limit=8").then(({ data }) => setTop(data.works || []));
   }, []);
 
   const pad = (n) => String(n).padStart(2, "0");
@@ -54,6 +59,32 @@ export default function Home() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="wrap">
+        {recent.length > 0 && (
+          <div className="sec" data-testid="sec-recent">
+            <div className="sec-head">
+              <h2><span className="idx">✦</span> <span className="sec-tag fill">Latest drops</span></h2>
+              <span className="count">freshly inscribed</span>
+            </div>
+            <div className="drops" data-testid="recent-row">
+              {recent.map((w) => <DiscoverTile key={w.like_key} w={w} />)}
+            </div>
+          </div>
+        )}
+
+        {top.length > 0 && (
+          <div className="sec" data-testid="sec-top">
+            <div className="sec-head">
+              <h2><span className="idx">₿</span> <span className="sec-tag inv">Most appreciated</span></h2>
+              <span className="count">top picks</span>
+            </div>
+            <div className="drops" data-testid="top-row">
+              {top.map((w) => <DiscoverTile key={w.like_key} w={w} />)}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="wrap">

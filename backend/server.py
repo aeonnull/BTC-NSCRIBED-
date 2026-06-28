@@ -14,6 +14,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
+from pymongo import ReturnDocument
 from pydantic import BaseModel, Field
 from authlib.integrations.httpx_client import AsyncOAuth1Client
 
@@ -74,6 +75,7 @@ class Work(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     title: str = ""
     image: str = ""
+    uploaded_at: Optional[str] = None
 
 
 class Collection(BaseModel):
@@ -328,6 +330,109 @@ async def get_profile(handle: str):
     return public_profile(u)
 
 
+# ---------- Discovery (recent uploads + most-liked) ----------
+async def _all_work_entries():
+    docs = await db.users.find(
+        {}, {"_id": 0, "handle": 1, "name": 1, "type": 1, "verified": 1,
+             "collections": 1, "created_at": 1},
+    ).to_list(1000)
+    entries = []
+    for u in docs:
+        u_created = u.get("created_at", "")
+        for c in u.get("collections", []):
+            cid = c.get("id", "")
+            for idx, w in enumerate(c.get("works", [])):
+                img = w.get("image")
+                if not img:
+                    continue
+                wid = w.get("id") or f"i{idx}"
+                entries.append({
+                    "handle": u["handle"],
+                    "name": u.get("name", u["handle"]),
+                    "type": u.get("type", "artist"),
+                    "verified": bool(u.get("verified", False)),
+                    "cid": cid,
+                    "collection_name": c.get("name", ""),
+                    "chain": c.get("chain", ""),
+                    "year": c.get("year", ""),
+                    "work_id": wid,
+                    "title": w.get("title") or "Untitled",
+                    "image": img,
+                    "uploaded_at": w.get("uploaded_at") or u_created or "",
+                    "like_key": f"{u['handle']}:{cid}:{wid}",
+                })
+    return entries
+
+
+async def _attach_likes(entries):
+    keys = [e["like_key"] for e in entries]
+    counts = {}
+    if keys:
+        async for d in db.likes.find({"k": {"$in": keys}}):
+            counts[d["k"]] = max(0, d.get("count", 0))
+    for e in entries:
+        e["likes"] = counts.get(e["like_key"], 0)
+    return entries
+
+
+@api_router.get("/recent")
+async def recent_works(limit: int = 8):
+    entries = await _all_work_entries()
+    entries.sort(key=lambda e: e["uploaded_at"] or "", reverse=True)
+    # Spread discovery: at most 2 pieces per profile in the latest row.
+    out, per_handle = [], {}
+    cap = max(1, min(24, limit))
+    for e in entries:
+        n = per_handle.get(e["handle"], 0)
+        if n >= 2:
+            continue
+        per_handle[e["handle"]] = n + 1
+        out.append(e)
+        if len(out) >= cap:
+            break
+    return {"works": await _attach_likes(out)}
+
+
+@api_router.get("/top")
+async def top_works(limit: int = 8):
+    entries = await _all_work_entries()
+    await _attach_likes(entries)
+    entries.sort(key=lambda e: (e["likes"], e["uploaded_at"] or ""), reverse=True)
+    return {"works": entries[: max(1, min(24, limit))]}
+
+
+# ---------- Likes (open to all visitors; dedupe handled client-side) ----------
+class LikeAction(BaseModel):
+    key: str
+    action: str = "like"
+
+
+@api_router.post("/likes")
+async def toggle_like(payload: LikeAction):
+    if not payload.key:
+        raise HTTPException(status_code=400, detail="Missing key")
+    inc = 1 if payload.action == "like" else -1
+    doc = await db.likes.find_one_and_update(
+        {"k": payload.key},
+        {"$inc": {"count": inc}},
+        upsert=True, return_document=ReturnDocument.AFTER,
+    )
+    count = max(0, doc.get("count", 0))
+    if count != doc.get("count", 0):
+        await db.likes.update_one({"k": payload.key}, {"$set": {"count": count}})
+    return {"key": payload.key, "count": count}
+
+
+@api_router.get("/likes")
+async def get_likes(keys: str = ""):
+    klist = [k for k in keys.split(",") if k]
+    counts = {}
+    if klist:
+        async for d in db.likes.find({"k": {"$in": klist}}):
+            counts[d["k"]] = max(0, d.get("count", 0))
+    return {"counts": counts}
+
+
 @api_router.put("/profiles/me")
 async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
     # Membership gate: when enabled, only verified holders may create/edit a profile.
@@ -347,7 +452,17 @@ async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_cur
     if payload.marketplaces is not None:
         update["marketplaces"] = [m.model_dump() for m in payload.marketplaces]
     if payload.collections is not None:
-        update["collections"] = [c.model_dump() for c in payload.collections]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cols = []
+        for c in payload.collections:
+            cd = c.model_dump()
+            for w in cd.get("works", []):
+                if not w.get("id"):
+                    w["id"] = str(uuid.uuid4())[:8]
+                if not w.get("uploaded_at"):
+                    w["uploaded_at"] = now_iso
+            cols.append(cd)
+        update["collections"] = cols
     if update:
         await db.users.update_one({"id": user["id"]}, {"$set": update})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})

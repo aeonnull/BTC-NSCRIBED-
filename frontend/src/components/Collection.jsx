@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, fetchLikes } from "../api";
 import { marketLabel } from "../lib/marketplace";
+import { LikeButton } from "./LikeButton";
 
 function Thumb({ src, className, onClick, ...rest }) {
   return <div className={className} onClick={onClick} style={src ? { backgroundImage: `url("${src}")` } : { background: "var(--bg-2)" }} {...rest} />;
@@ -12,6 +13,7 @@ export default function Collection() {
   const navigate = useNavigate();
   const [p, setP] = useState(null);
   const [lb, setLb] = useState(null);
+  const [likes, setLikes] = useState({});
 
   useEffect(() => {
     api.get(`/profiles/${handle}`).then(({ data }) => setP(data)).catch(() => setP(false));
@@ -22,6 +24,14 @@ export default function Collection() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    if (!p) return;
+    const col = p.collections.find((x) => x.id === cid);
+    if (!col) return;
+    const keys = (col.works || []).map((w, i) => `${handle}:${cid}:${w.id || "i" + i}`);
+    fetchLikes(keys).then(setLikes);
+  }, [p, handle, cid]);
 
   if (p === false) return <div className="wrap"><div className="empty-note">Profile not found.</div></div>;
   if (!p) return <div className="wrap"><div className="empty-note">Loading…</div></div>;
@@ -66,16 +76,22 @@ export default function Collection() {
           </div>
           {works.length ? (
             <div className="works" data-testid="works-grid">
-              {works.map((w, i) => (
-                <div key={w.id || i} className="work" data-testid={`work-${i}`} tabIndex={0} role="button"
-                  onClick={() => setLb(w)} onKeyDown={(e) => e.key === "Enter" && setLb(w)}>
-                  <Thumb src={w.image} className="wa" />
-                  <div className="wc">
-                    <div className="wt">{w.title || "Untitled"}</div>
-                    <div className="wm">{c.chain} · {c.year}</div>
+              {works.map((w, i) => {
+                const key = `${handle}:${cid}:${w.id || "i" + i}`;
+                return (
+                  <div key={w.id || i} className="work" data-testid={`work-${i}`} tabIndex={0} role="button"
+                    onClick={() => setLb(w)} onKeyDown={(e) => e.key === "Enter" && setLb(w)}>
+                    <div className="wa-wrap">
+                      <Thumb src={w.image} className="wa" />
+                      <LikeButton likeKey={key} initialCount={likes[key] || 0} className="work-like" />
+                    </div>
+                    <div className="wc">
+                      <div className="wt">{w.title || "Untitled"}</div>
+                      <div className="wm">{c.chain} · {c.year}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : <div className="empty-note">No pieces uploaded yet.</div>}
         </div>
@@ -92,6 +108,10 @@ export default function Collection() {
                   <div className="kv"><span className="k">Collection</span><span className="dots"></span><span className="v">{c.name}</span></div>
                   <div className="kv"><span className="k">Chain</span><span className="dots"></span><span className="v">{c.chain}</span></div>
                   <div className="kv"><span className="k">Year</span><span className="dots"></span><span className="v">{c.year}</span></div>
+                </div>
+                <div className="lb-like">
+                  <LikeButton likeKey={`${handle}:${cid}:${lb.id || ""}`} initialCount={likes[`${handle}:${cid}:${lb.id || ""}`] || 0} />
+                  <span className="lb-like-hint">appreciate this piece</span>
                 </div>
               </div>
               <button className="lb-close" data-testid="lightbox-close" onClick={() => setLb(null)} aria-label="Close">
