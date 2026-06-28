@@ -40,6 +40,23 @@ Set in backend/.env when connecting: HOLDER_VERIFY_URL, HOLDER_SHARED_SECRET, RE
 - Support: X @nscribed + nscribed.xyz in header/footer.
 - QA: 15/15 backend + 100% frontend passed (test suite at backend/tests/backend_test.py).
 
+## Discovery + Likes (2026-06-29)
+- Home now has two discovery rows ABOVE Artists/Collectors so both artists & collectors
+  surface via their artworks:
+  - "Latest drops" (GET /api/recent) — newest uploads, capped 2 per profile for diversity.
+  - "Most appreciated" (GET /api/top) — artworks sorted by like count desc.
+- Each artwork tile (DiscoverTile) → clicking opens the collection /{handle}/c/{cid}.
+- Likes: round ₿ Bitcoin button (LikeButton.jsx), OPEN TO ALL visitors (no login).
+  - Own likes tracked in localStorage 'nscribed_likes' (toggle once per browser); total in
+    MongoDB `likes` collection keyed by like_key = "{handle}:{cid}:{work_id}".
+  - Endpoints: POST /api/likes {key,action:like|unlike} (count floored at 0),
+    GET /api/likes?keys=a,b,c -> {counts}.
+  - Like button appears on discovery tiles, collection works grid, and lightbox.
+- Works now carry id + uploaded_at (set on save in PUT /api/profiles/me) for correct sorting.
+- QA: iteration_2 — 12/12 backend + 100% frontend passed. No defects.
+- Future scaling (noted, not blocking): denormalise works into own collection / $unwind
+  aggregation; rate-limit POST /api/likes; LikeButton count can be stale on collection page.
+
 ## Next / Backlog
 - DEPLOY-READY (2026-06-27): deployment health check PASSED. Fixed: removed .env from
   .gitignore (needed for Emergent deploy), optimized /api/profiles to two type-filtered queries.
