@@ -43,19 +43,21 @@ Set in backend/.env when connecting: HOLDER_VERIFY_URL, HOLDER_SHARED_SECRET, RE
 ## Discovery + Likes (2026-06-29)
 - Home now has two discovery rows ABOVE Artists/Collectors so both artists & collectors
   surface via their artworks:
-  - "Latest drops" (GET /api/recent) — newest uploads, capped 2 per profile for diversity.
-  - "Most appreciated" (GET /api/top) — artworks sorted by like count desc.
+  - "Latest uploads" (GET /api/recent) — newest UPLOADS (we only know upload time, not
+    inscribe/release date), capped 2 per profile for diversity.
+  - "Most appreciated" (GET /api/top) — top artworks ranked by likes weighted by recency
+    (HN-style decay, gravity 1.5). Label intentionally avoids "most likes"/"trending".
 - Each artwork tile (DiscoverTile) → clicking opens the collection /{handle}/c/{cid}.
 - Likes: round ₿ Bitcoin button (LikeButton.jsx), OPEN TO ALL visitors (no login).
   - Own likes tracked in localStorage 'nscribed_likes' (toggle once per browser); total in
     MongoDB `likes` collection keyed by like_key = "{handle}:{cid}:{work_id}".
   - Endpoints: POST /api/likes {key,action:like|unlike} (count floored at 0),
     GET /api/likes?keys=a,b,c -> {counts}.
-  - Like button appears on discovery tiles, collection works grid, and lightbox.
-- Works now carry id + uploaded_at (set on save in PUT /api/profiles/me) for correct sorting.
-- QA: iteration_2 — 12/12 backend + 100% frontend passed. No defects.
-- Future scaling (noted, not blocking): denormalise works into own collection / $unwind
-  aggregation; rate-limit POST /api/likes; LikeButton count can be stale on collection page.
+- Profile rows ROTATE: /api/profiles uses _rotate_daily — deterministic daily shuffle
+  (stable within a UTC day, changes each day) and a featured window of 12 when a type grows
+  past 12, so everyone gets front-page time over the week.
+- Works now carry id + uploaded_at (set on save in PUT /api/profiles/me) for sorting.
+- QA: iteration_2 — 12/12 backend + 100% frontend passed. Label/rotation tweaks self-tested.
 
 ## Next / Backlog
 - DEPLOY-READY (2026-06-27): deployment health check PASSED. Fixed: removed .env from

@@ -1,5 +1,6 @@
 import os
 import uuid
+import random
 import logging
 import jwt
 from pathlib import Path
@@ -308,6 +309,17 @@ async def download(file_id: str):
 
 
 # ---------- Profile routes ----------
+def _rotate_daily(items, window=12):
+    """Deterministic daily shuffle so different profiles surface each day.
+    Stable within a UTC day; rotates the featured window once it grows past `window`."""
+    if len(items) <= 1:
+        return items
+    rnd = random.Random(datetime.now(timezone.utc).toordinal())
+    shuffled = items[:]
+    rnd.shuffle(shuffled)
+    return shuffled[:window]
+
+
 @api_router.get("/profiles")
 async def list_profiles():
     projection = {
@@ -317,8 +329,8 @@ async def list_profiles():
     artist_docs = await db.users.find({"type": "artist"}, projection).to_list(500)
     collector_docs = await db.users.find({"type": "collector"}, projection).to_list(500)
     return {
-        "artists": [public_profile(u) for u in artist_docs],
-        "collectors": [public_profile(u) for u in collector_docs],
+        "artists": [public_profile(u) for u in _rotate_daily(artist_docs)],
+        "collectors": [public_profile(u) for u in _rotate_daily(collector_docs)],
     }
 
 
