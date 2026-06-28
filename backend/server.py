@@ -397,7 +397,21 @@ async def recent_works(limit: int = 8):
 async def top_works(limit: int = 8):
     entries = await _all_work_entries()
     await _attach_likes(entries)
-    entries.sort(key=lambda e: (e["likes"], e["uploaded_at"] or ""), reverse=True)
+    now = datetime.now(timezone.utc)
+
+    def score(e):
+        ts = e.get("uploaded_at") or ""
+        try:
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_h = max(0.0, (now - dt).total_seconds() / 3600.0)
+        except Exception:
+            age_h = 9999.0
+        # Hacker-News-style decay: liked + recent ranks highest; gravity 1.5.
+        return (e["likes"] + 1) / ((age_h + 2) ** 1.5)
+
+    entries.sort(key=score, reverse=True)
     return {"works": entries[: max(1, min(24, limit))]}
 
 

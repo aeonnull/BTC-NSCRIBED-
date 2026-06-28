@@ -77,8 +77,8 @@ export default function Home() {
         {top.length > 0 && (
           <div className="sec" data-testid="sec-top">
             <div className="sec-head">
-              <h2><span className="idx">₿</span> <span className="sec-tag inv">Most appreciated</span></h2>
-              <span className="count">top picks</span>
+              <h2><span className="idx">₿</span> <span className="sec-tag inv">Trending now</span></h2>
+              <span className="count">liked &amp; fresh</span>
             </div>
             <div className="drops" data-testid="top-row">
               {top.map((w) => <DiscoverTile key={w.like_key} w={w} />)}
