@@ -55,7 +55,7 @@ export default function Profile() {
 
             {p.links?.length > 0 && (
               <>
-                <div className="subhead">Links</div>
+                <div className="subhead">Links &amp; social</div>
                 <div className="links">
                   {p.links.map((l, i) => (
                     <a key={i} className="chip" href={l.url} target="_blank" rel="noreferrer" data-testid={`profile-link-${i}`}>

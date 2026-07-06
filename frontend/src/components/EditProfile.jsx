@@ -145,10 +145,10 @@ export default function EditProfile() {
         </div>
 
         <div className="field">
-          <label>Links</label>
+          <label>Links &amp; social media</label>
           {form.links.map((l, i) => (
             <div className="row-pair" key={i}>
-              <input className="inp" placeholder="Label (e.g. Website)" data-testid={`link-label-${i}`} value={l.label} onChange={(e) => updItem("links", i, "label", e.target.value)} />
+              <input className="inp" placeholder="Platform (e.g. Instagram, TikTok, YouTube)" data-testid={`link-label-${i}`} value={l.label} onChange={(e) => updItem("links", i, "label", e.target.value)} />
               <input className="inp" placeholder="https://…" data-testid={`link-url-${i}`} value={l.url} onChange={(e) => updItem("links", i, "url", e.target.value)} />
               <button className="del-btn" data-testid={`link-del-${i}`} onClick={() => delItem("links", i)}><Trash /></button>
             </div>
