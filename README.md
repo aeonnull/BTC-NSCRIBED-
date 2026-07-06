@@ -60,7 +60,7 @@ Backend (`backend/.env`):
 | `TWITTER_API_KEY` / `TWITTER_API_SECRET` | X (Twitter) app credentials |
 | `HOLDER_VERIFY_URL` | External holder-verification service URL (optional) |
 | `HOLDER_SHARED_SECRET` | Shared secret for the verification callback (optional) |
-| `REQUIRE_HOLDER` | `true` to gate profile editing to verified holders |
+| `REQUIRE_HOLDER` | Gate profile creation/editing to verified holders. Defaults to `true`; set to `false` to open it up |
 
 Frontend (`frontend/.env`):
 

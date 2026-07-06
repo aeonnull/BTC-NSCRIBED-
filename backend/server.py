@@ -36,7 +36,7 @@ TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
 HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
 HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
-REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'false').lower() in ('1', 'true', 'yes')
+REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'true').lower() in ('1', 'true', 'yes')
 
 APP_NAME = "nscribed"
 DEMO_REMOVE_THRESHOLD = 10  # demo profiles auto-clear once this many real users join
@@ -213,6 +213,7 @@ async def auth_me(user: dict = Depends(get_current_user)):
     data = public_profile(user)
     data["holder"] = bool(user.get("holder", False))
     data["holder_verified_at"] = user.get("holder_verified_at")
+    data["require_holder"] = REQUIRE_HOLDER
     return data
 
 
