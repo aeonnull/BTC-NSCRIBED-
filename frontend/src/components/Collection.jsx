@@ -55,14 +55,26 @@ export default function Collection() {
             ) : (
               <div className="kv"><span className="k">Artist</span><span className="dots"></span><span className="v">{p.name}</span></div>
             )}
-            <div className="kv"><span className="k">Chain</span><span className="dots"></span><span className="v">{c.chain}</span></div>
+            {c.artist_handle && (
+              <div className="kv" data-testid="collection-artist-tag">
+                <span className="k">By</span><span className="dots"></span>
+                <span className="v">
+                  {c.artist_exists ? (
+                    <span className="mk" style={{ cursor: "pointer" }} onClick={() => navigate(`/${c.artist_handle}`)}>@{c.artist_handle}</span>
+                  ) : `@${c.artist_handle}`}
+                </span>
+              </div>
+            )}
+            {c.chain && (
+              <div className="kv"><span className="k">Chain</span><span className="dots"></span><span className="v">{c.chain}</span></div>
+            )}
             <div className="kv"><span className="k">Year</span><span className="dots"></span><span className="v">{c.year}</span></div>
             <div className="kv"><span className="k">Pieces</span><span className="dots"></span><span className="v">{pad(works.length)}</span></div>
             <div className="kv">
               <span className="k">Marketplace</span><span className="dots"></span>
               {c.marketplace_url ? (
                 <a className="v mk" href={c.marketplace_url} target="_blank" rel="noreferrer" data-testid="collection-marketplace">
-                  {marketLabel(c.marketplace_url, c.marketplace_name)} &#8599;
+                  {marketLabel(c.marketplace_url, c.marketplace_name, c.marketplace_type)} &#8599;
                 </a>
               ) : (<span className="v" style={{ color: "var(--muted)" }}>—</span>)}
             </div>
@@ -87,7 +99,7 @@ export default function Collection() {
                     </div>
                     <div className="wc">
                       <div className="wt">{w.title || "Untitled"}</div>
-                      <div className="wm">{c.chain} · {c.year}</div>
+                      <div className="wm">{c.chain ? `${c.chain} · ${c.year}` : c.year}</div>
                     </div>
                   </div>
                 );
@@ -106,7 +118,9 @@ export default function Collection() {
                 <div className="lb-title">{lb.title || "Untitled"}</div>
                 <div className="lb-mani">
                   <div className="kv"><span className="k">Collection</span><span className="dots"></span><span className="v">{c.name}</span></div>
-                  <div className="kv"><span className="k">Chain</span><span className="dots"></span><span className="v">{c.chain}</span></div>
+                  {c.chain && (
+                    <div className="kv"><span className="k">Chain</span><span className="dots"></span><span className="v">{c.chain}</span></div>
+                  )}
                   <div className="kv"><span className="k">Year</span><span className="dots"></span><span className="v">{c.year}</span></div>
                 </div>
                 <div className="lb-like">

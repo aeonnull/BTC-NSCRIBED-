@@ -9,6 +9,12 @@ const Trash = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
 );
 
+const CHAIN_PRESETS = ["Bitcoin", "Ethereum", "Solana", "Base", "Tezos"];
+const chainMode = (chain) => (chain === "" ? "None" : CHAIN_PRESETS.includes(chain) ? chain : "Other");
+
+const LINK_LABEL_PRESETS = ["Website", "X", "Instagram", "TikTok", "GitHub", "Discord", "Telegram", "YouTube"];
+const linkLabelMode = (label) => (LINK_LABEL_PRESETS.includes(label) ? label : "Custom");
+
 export default function EditProfile() {
   const navigate = useNavigate();
   const { user, ready, login, setUser } = useAuth();
@@ -31,10 +37,14 @@ export default function EditProfile() {
         name: user.name || "",
         type: user.type || "artist",
         bio: user.bio || "",
+        role: user.role || "",
+        contact: user.contact || { label: "", value: "" },
         avatar: user.avatar || "",
         links: user.links || [],
         marketplaces: user.marketplaces || [],
-        collections: (user.collections || []).map((c) => ({ ...c, works: c.works || [] })),
+        collections: (user.collections || []).map((c) => ({
+          ...c, works: c.works || [], marketplace_type: c.marketplace_type || "digital", artist_handle: c.artist_handle || "",
+        })),
       });
     }
   }, [ready, user]);
@@ -91,7 +101,10 @@ export default function EditProfile() {
   };
 
   const updCol = (i, field, v) => updItem("collections", i, field, v);
-  const newCollection = () => ({ id: Math.random().toString(36).slice(2, 10), name: "New collection", chain: "Bitcoin", year: "2025", marketplace_name: "", marketplace_url: "", works: [] });
+  const newCollection = () => ({
+    id: Math.random().toString(36).slice(2, 10), name: "New collection", chain: "Bitcoin", year: "2025",
+    marketplace_name: "", marketplace_url: "", marketplace_type: "digital", artist_handle: "", works: [],
+  });
 
   const save = async () => {
     setSaving(true);
@@ -153,15 +166,38 @@ export default function EditProfile() {
         </div>
 
         <div className="field">
+          <label>Role (optional)</label>
+          <input className="inp" placeholder="e.g. Developer, Community Manager, Pixel Artist" data-testid="edit-role" value={form.role} onChange={(e) => set("role", e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Contact (optional)</label>
+          <div className="row-pair">
+            <input className="inp" placeholder="Label (e.g. Email, Booking)" data-testid="edit-contact-label" value={form.contact.label} onChange={(e) => set("contact", { ...form.contact, label: e.target.value })} />
+            <input className="inp" placeholder="Email or URL" data-testid="edit-contact-value" value={form.contact.value} onChange={(e) => set("contact", { ...form.contact, value: e.target.value })} />
+          </div>
+        </div>
+
+        <div className="field">
           <label>Links</label>
           {form.links.map((l, i) => (
             <div className="row-pair" key={i}>
-              <input className="inp" placeholder="Label (e.g. Website)" data-testid={`link-label-${i}`} value={l.label} onChange={(e) => updItem("links", i, "label", e.target.value)} />
+              <select className="inp" data-testid={`link-label-${i}`} value={linkLabelMode(l.label)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  updItem("links", i, "label", v === "Custom" ? (linkLabelMode(l.label) === "Custom" ? l.label : "") : v);
+                }}>
+                {LINK_LABEL_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                <option value="Custom">Custom</option>
+              </select>
+              {linkLabelMode(l.label) === "Custom" && (
+                <input className="inp" placeholder="Custom label" data-testid={`link-label-custom-${i}`} value={l.label} onChange={(e) => updItem("links", i, "label", e.target.value)} />
+              )}
               <input className="inp" placeholder="https://…" data-testid={`link-url-${i}`} value={l.url} onChange={(e) => updItem("links", i, "url", e.target.value)} />
               <button className="del-btn" data-testid={`link-del-${i}`} onClick={() => delItem("links", i)}><Trash /></button>
             </div>
           ))}
-          <button className="add-btn" data-testid="add-link" onClick={() => addItem("links", { label: "", url: "" })}>+ Add link</button>
+          <button className="add-btn" data-testid="add-link" onClick={() => addItem("links", { label: "Website", url: "" })}>+ Add link</button>
         </div>
 
         <div className="field">
@@ -173,15 +209,35 @@ export default function EditProfile() {
                 <button className="del-btn" data-testid={`col-del-${i}`} onClick={() => delItem("collections", i)}><Trash /></button>
               </div>
               <div className="grid2">
-                <input className="inp" placeholder="Chain (e.g. Bitcoin)" data-testid={`col-chain-${i}`} value={c.chain} onChange={(e) => updCol(i, "chain", e.target.value)} />
+                <div>
+                  <select className="inp" data-testid={`col-chain-${i}`} value={chainMode(c.chain)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "None") updCol(i, "chain", "");
+                      else if (v === "Other") updCol(i, "chain", chainMode(c.chain) === "Other" ? c.chain : "");
+                      else updCol(i, "chain", v);
+                    }}>
+                    {CHAIN_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    <option value="None">None</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {chainMode(c.chain) === "Other" && (
+                    <input className="inp" style={{ marginTop: 8 }} placeholder="Chain name" data-testid={`col-chain-other-${i}`} value={c.chain} onChange={(e) => updCol(i, "chain", e.target.value)} />
+                  )}
+                </div>
                 <input className="inp" placeholder="Year (e.g. 2025)" data-testid={`col-year-${i}`} value={c.year} onChange={(e) => updCol(i, "year", e.target.value)} />
               </div>
+              <input className="inp" style={{ marginTop: 10 }} placeholder="Artist @handle (optional)" data-testid={`col-artist-${i}`} value={c.artist_handle} onChange={(e) => updCol(i, "artist_handle", e.target.value)} />
               <div className="mkt-row">
                 <input className="inp" placeholder="Marketplace link (paste the link where this collection lives)" data-testid={`col-mkt-url-${i}`} value={c.marketplace_url} onChange={(e) => updCol(i, "marketplace_url", e.target.value)} />
                 <input className="inp mkt-name-inp" placeholder="Name (optional — auto from link)" data-testid={`col-mkt-name-${i}`} value={c.marketplace_name} onChange={(e) => updCol(i, "marketplace_name", e.target.value)} />
               </div>
+              <div className="seg" data-testid={`col-mkt-type-${i}`} style={{ marginTop: 10 }}>
+                <button className={c.marketplace_type !== "physical" ? "on" : ""} onClick={() => updCol(i, "marketplace_type", "digital")}>Digital</button>
+                <button className={c.marketplace_type === "physical" ? "on" : ""} onClick={() => updCol(i, "marketplace_type", "physical")}>Physical</button>
+              </div>
               {c.marketplace_url && (
-                <div className="mkt-preview" data-testid={`col-mkt-preview-${i}`}>Shows as: <b>on {marketLabel(c.marketplace_url, c.marketplace_name)} ↗</b></div>
+                <div className="mkt-preview" data-testid={`col-mkt-preview-${i}`}>Shows as: <b>on {marketLabel(c.marketplace_url, c.marketplace_name, c.marketplace_type)} ↗</b></div>
               )}
 
               <div className="works-edit">

@@ -21,6 +21,10 @@ from bson import ObjectId
 from pymongo import ReturnDocument
 from pydantic import BaseModel, Field
 from authlib.integrations.httpx_client import AsyncOAuth1Client
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from art import art_uri, build_demo_works
 
@@ -33,10 +37,17 @@ db = client[os.environ['DB_NAME']]
 fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="uploads")
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
-JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
-SESSION_SECRET = os.environ.get('SESSION_SECRET', 'dev-session')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+SESSION_SECRET = os.environ.get('SESSION_SECRET')
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is required (no dev fallback)")
+if not SESSION_SECRET:
+    raise RuntimeError("SESSION_SECRET environment variable is required (no dev fallback)")
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
+# Must be set to the production domain(s) (comma-separated) — no wildcard default.
+CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()] \
+    or ([APP_BASE_URL] if APP_BASE_URL else [])
 # Link to blockheadsbtc.xyz's own holder-verification page (wallet connect + Ordinal
 # check happens over there; it hands the user back to nscribed via a `bh_token`).
 HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
@@ -54,6 +65,11 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 api_router = APIRouter(prefix="/api")
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # ---------- OAuth (Twitter / X) — DB-backed, no session/cookie dependency ----------
 TW_REQUEST_TOKEN_URL = 'https://api.twitter.com/oauth/request_token'
@@ -92,7 +108,14 @@ class Collection(BaseModel):
     year: str = "2025"
     marketplace_name: str = ""
     marketplace_url: str = ""
+    marketplace_type: str = "digital"
+    artist_handle: str = ""
     works: List[Work] = []
+
+
+class ContactInfo(BaseModel):
+    label: str = ""
+    value: str = ""
 
 
 class ProfileUpdate(BaseModel):
@@ -100,6 +123,8 @@ class ProfileUpdate(BaseModel):
     type: Optional[str] = None
     bio: Optional[str] = None
     avatar: Optional[str] = None
+    role: Optional[str] = None
+    contact: Optional[ContactInfo] = None
     links: Optional[List[LinkItem]] = None
     marketplaces: Optional[List[MarketItem]] = None
     collections: Optional[List[Collection]] = None
@@ -125,7 +150,21 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     return user
 
 
-def public_profile(u: dict) -> dict:
+async def _known_handles_lower() -> set:
+    """All existing handles, lowercased, for case-insensitive artist_handle lookups."""
+    docs = await db.users.find({}, {"_id": 0, "handle": 1}).to_list(2000)
+    return {d["handle"].lower() for d in docs if d.get("handle")}
+
+
+def public_profile(u: dict, known_handles: set) -> dict:
+    collections = []
+    for c in u.get("collections", []):
+        cc = dict(c)
+        cc["marketplace_type"] = cc.get("marketplace_type") or "digital"
+        artist_handle = (cc.get("artist_handle") or "").strip()
+        cc["artist_handle"] = artist_handle
+        cc["artist_exists"] = bool(artist_handle) and artist_handle.lower() in known_handles
+        collections.append(cc)
     return {
         "id": u["id"],
         "handle": u["handle"],
@@ -133,16 +172,19 @@ def public_profile(u: dict) -> dict:
         "type": u.get("type", "artist"),
         "verified": u.get("verified", False),
         "bio": u.get("bio", ""),
+        "role": u.get("role", ""),
+        "contact": u.get("contact") or {"label": "", "value": ""},
         "avatar": u.get("avatar", ""),
         "links": u.get("links", []),
         "marketplaces": u.get("marketplaces", []),
-        "collections": u.get("collections", []),
+        "collections": collections,
     }
 
 
 # ---------- Auth routes ----------
 @api_router.get("/auth/twitter/login")
-async def twitter_login():
+@limiter.limit("10/minute")
+async def twitter_login(request: Request):
     if not TWITTER_API_KEY or not TWITTER_API_SECRET:
         raise HTTPException(status_code=503, detail="Twitter login not configured")
     callback = f"{APP_BASE_URL}/api/auth/twitter/callback"
@@ -159,7 +201,8 @@ async def twitter_login():
 
 
 @api_router.get("/auth/twitter/callback")
-async def twitter_callback(oauth_token: str = "", oauth_verifier: str = ""):
+@limiter.limit("20/minute")
+async def twitter_callback(request: Request, oauth_token: str = "", oauth_verifier: str = ""):
     tmp = await db.oauth_tmp.find_one({"oauth_token": oauth_token})
     if not tmp or not oauth_verifier:
         logger.error("Twitter callback missing request token or verifier")
@@ -216,7 +259,8 @@ async def twitter_callback(oauth_token: str = "", oauth_verifier: str = ""):
 
 @api_router.get("/auth/me")
 async def auth_me(user: dict = Depends(get_current_user)):
-    data = public_profile(user)
+    known = await _known_handles_lower()
+    data = public_profile(user, known)
     data["holder"] = bool(user.get("holder", False))
     data["holder_verified_at"] = user.get("holder_verified_at")
     data["require_holder"] = REQUIRE_HOLDER
@@ -277,7 +321,8 @@ async def link_wallet(payload: LinkWalletBody, user: dict = Depends(get_current_
         "holder_wallet": parsed["address"],
     }})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
-    data = public_profile(fresh)
+    known = await _known_handles_lower()
+    data = public_profile(fresh, known)
     data["holder"] = True
     data["holder_verified_at"] = fresh.get("holder_verified_at")
     data["require_holder"] = REQUIRE_HOLDER
@@ -286,7 +331,8 @@ async def link_wallet(payload: LinkWalletBody, user: dict = Depends(get_current_
 
 # ---------- Upload / files (stored in MongoDB GridFS — self-contained) ----------
 @api_router.post("/upload")
-async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def upload(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "png")
     content_type = file.content_type or MIME_TYPES.get(ext, "image/png")
     if not content_type.startswith("image/"):
@@ -337,13 +383,15 @@ def _rotate_daily(items, window=12):
 async def list_profiles():
     projection = {
         "_id": 0, "id": 1, "handle": 1, "name": 1, "type": 1, "verified": 1,
-        "bio": 1, "avatar": 1, "links": 1, "marketplaces": 1, "collections": 1,
+        "bio": 1, "role": 1, "contact": 1, "avatar": 1, "links": 1,
+        "marketplaces": 1, "collections": 1,
     }
     artist_docs = await db.users.find({"type": "artist"}, projection).to_list(500)
     collector_docs = await db.users.find({"type": "collector"}, projection).to_list(500)
+    known = await _known_handles_lower()
     return {
-        "artists": [public_profile(u) for u in _rotate_daily(artist_docs)],
-        "collectors": [public_profile(u) for u in _rotate_daily(collector_docs)],
+        "artists": [public_profile(u, known) for u in _rotate_daily(artist_docs)],
+        "collectors": [public_profile(u, known) for u in _rotate_daily(collector_docs)],
     }
 
 
@@ -352,7 +400,8 @@ async def get_profile(handle: str):
     u = await db.users.find_one({"handle": handle}, {"_id": 0})
     if not u:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return public_profile(u)
+    known = await _known_handles_lower()
+    return public_profile(u, known)
 
 
 # ---------- Discovery (recent uploads + most-liked) ----------
@@ -447,7 +496,8 @@ class LikeAction(BaseModel):
 
 
 @api_router.post("/likes")
-async def toggle_like(payload: LikeAction):
+@limiter.limit("30/minute")
+async def toggle_like(request: Request, payload: LikeAction):
     if not payload.key:
         raise HTTPException(status_code=400, detail="Missing key")
     inc = 1 if payload.action == "like" else -1
@@ -463,7 +513,8 @@ async def toggle_like(payload: LikeAction):
 
 
 @api_router.get("/likes")
-async def get_likes(keys: str = ""):
+@limiter.limit("60/minute")
+async def get_likes(request: Request, keys: str = ""):
     klist = [k for k in keys.split(",") if k]
     counts = {}
     if klist:
@@ -484,6 +535,10 @@ async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_cur
         update["type"] = payload.type
     if payload.bio is not None:
         update["bio"] = payload.bio
+    if payload.role is not None:
+        update["role"] = payload.role
+    if payload.contact is not None:
+        update["contact"] = payload.contact.model_dump()
     if payload.avatar is not None:
         update["avatar"] = payload.avatar
     if payload.links is not None:
@@ -495,6 +550,7 @@ async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_cur
         cols = []
         for c in payload.collections:
             cd = c.model_dump()
+            cd["artist_handle"] = cd.get("artist_handle", "").lstrip("@").strip()
             for w in cd.get("works", []):
                 if not w.get("id"):
                     w["id"] = str(uuid.uuid4())[:8]
@@ -505,7 +561,8 @@ async def update_my_profile(payload: ProfileUpdate, user: dict = Depends(get_cur
     if update:
         await db.users.update_one({"id": user["id"]}, {"$set": update})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
-    return public_profile(fresh)
+    known = await _known_handles_lower()
+    return public_profile(fresh, known)
 
 
 # ---------- Seed demo data ----------
@@ -587,7 +644,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

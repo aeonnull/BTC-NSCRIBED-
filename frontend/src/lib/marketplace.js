@@ -1,11 +1,7 @@
-// Derive a marketplace display name purely from the URL (the domain), with optional override.
-// No preset/hardcoded marketplaces — whatever link the user pastes is what shows.
-export function marketLabel(url, name) {
+// Marketplace display label: the user-typed name wins; otherwise fall back to a
+// type-based label (digital vs. physical) rather than guessing from the URL.
+export function marketLabel(url, name, type = "digital") {
   if (name && name.trim()) return name.trim();
   if (!url) return "";
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "Marketplace";
-  }
+  return type === "physical" ? "GALLERY / PHYSICAL" : "ONLINE STORE";
 }

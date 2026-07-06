@@ -40,7 +40,7 @@ export default function Profile() {
         <div className="profile">
           <Thumb src={p.avatar} className="pf-avatar" />
           <div className="pf-meta">
-            <div className="pf-type">{p.type}</div>
+            <div className="pf-type">{p.type}{p.role && <span className="pf-role"> · {p.role}</span>}</div>
             <div className="pf-name" data-testid="profile-name">{p.name}{p.verified && <Verified size={26} />}</div>
             <a className="pf-handle" href={`https://x.com/${p.handle}`} target="_blank" rel="noreferrer" data-testid="profile-x-link">
               <XLogo style={{ width: 15, height: 15, fill: "var(--cream)" }} /> @{p.handle}
@@ -65,6 +65,21 @@ export default function Profile() {
                 </div>
               </>
             )}
+
+            {p.contact?.value && (
+              <>
+                <div className="subhead">Contact</div>
+                <div className="links">
+                  <a
+                    className="chip"
+                    href={p.contact.value.includes("@") && !p.contact.value.includes("://") ? `mailto:${p.contact.value}` : p.contact.value}
+                    target="_blank" rel="noreferrer" data-testid="profile-contact"
+                  >
+                    {p.contact.label || p.contact.value}<span className="ar">&#8599;</span>
+                  </a>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -83,12 +98,20 @@ export default function Profile() {
                   <div className="ci">
                     <div className="cname">{c.name}</div>
                     <div className="cmeta">
-                      <span><b>{c.chain}</b></span><span><b>{c.year}</b></span><span>{(c.works || []).length} pcs</span>
+                      {c.chain && <span><b>{c.chain}</b></span>}
+                      <span><b>{c.year}</b></span><span>{(c.works || []).length} pcs</span>
                     </div>
+                    {c.artist_handle && (
+                      <div className="cby" data-testid={`collection-artist-${c.id}`}>
+                        BY {c.artist_exists ? (
+                          <b onClick={(e) => { e.stopPropagation(); navigate(`/${c.artist_handle}`); }}>@{c.artist_handle}</b>
+                        ) : `@${c.artist_handle}`}
+                      </div>
+                    )}
                     {c.marketplace_url && (
                       <a className="on-market" href={c.marketplace_url} target="_blank" rel="noreferrer"
                         data-testid={`collection-market-${c.id}`} onClick={(e) => e.stopPropagation()}>
-                        on {marketLabel(c.marketplace_url, c.marketplace_name)} <span className="ar">&#8599;</span>
+                        on {marketLabel(c.marketplace_url, c.marketplace_name, c.marketplace_type)} <span className="ar">&#8599;</span>
                       </a>
                     )}
                   </div>

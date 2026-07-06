@@ -134,6 +134,9 @@ nav.top .lnk:hover{color:var(--cream)}
 .on-market{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--orange);transition:.15s}
 .on-market:hover{filter:brightness(1.15);text-decoration:underline}
 .on-market .ar{color:var(--orange)}
+.cby{margin-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.cby b{color:var(--text);font-weight:400;cursor:pointer}
+.cby b:hover{color:var(--orange)}
 .mkt-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 .mkt-row .inp{flex:1;min-width:200px}
 .mkt-row .mkt-name-inp{flex:none;width:230px;max-width:100%}

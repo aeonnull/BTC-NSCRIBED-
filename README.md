@@ -66,12 +66,16 @@ Backend (`backend/.env`):
 | `MONGO_URL` | MongoDB connection string |
 | `DB_NAME` | Database name |
 | `APP_BASE_URL` | Public base URL of the app (used for OAuth callback + file URLs) |
-| `JWT_SECRET` | Secret for signing session tokens |
-| `SESSION_SECRET` | Secret for the OAuth session middleware |
+| `JWT_SECRET` | Secret for signing session tokens. **Required** — the app refuses to start without it (no dev fallback) |
+| `SESSION_SECRET` | Secret for the OAuth session middleware. **Required** — same, no dev fallback |
+| `CORS_ORIGINS` | Comma-separated list of allowed origins. **Must be set to your production domain(s)** (e.g. `https://nscribed.xyz`) — there is no wildcard default |
 | `TWITTER_API_KEY` / `TWITTER_API_SECRET` | X (Twitter) app credentials |
 | `HOLDER_VERIFY_URL` | Link to blockheadsbtc.xyz's holder-verification page (optional) |
 | `BLOCKHEADS_SSO_SECRET` | Shared HMAC key with blockheadsbtc.xyz for verifying `bh_token` handoff tokens |
 | `REQUIRE_HOLDER` | Gate profile creation/editing to verified holders. Defaults to `true`; set to `false` to open it up |
+
+Basic per-IP rate limiting (via `slowapi`) is applied to `/api/upload`, the likes endpoints,
+and the X auth endpoints.
 
 Frontend (`frontend/.env`):
 
