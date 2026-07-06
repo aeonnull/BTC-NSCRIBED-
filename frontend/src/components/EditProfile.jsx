@@ -19,8 +19,14 @@ export default function EditProfile() {
   const [copied, setCopied] = useState(false);
   const avatarRef = useRef();
 
+  const locked = ready && user && user.require_holder && !user.holder;
+
   useEffect(() => {
-    if (ready && user) {
+    if (locked) navigate("/access", { replace: true });
+  }, [locked, navigate]);
+
+  useEffect(() => {
+    if (ready && user && !locked) {
       setForm({
         name: user.name || "",
         type: user.type || "artist",
@@ -94,6 +100,8 @@ export default function EditProfile() {
       setUser(data);
       setFlash(true);
       setTimeout(() => setFlash(false), 2500);
+    } catch (e) {
+      if (e?.response?.status === 403) navigate("/access", { replace: true });
     } finally { setSaving(false); }
   };
 

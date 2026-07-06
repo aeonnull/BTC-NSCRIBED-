@@ -2,6 +2,9 @@ import os
 import uuid
 import random
 import logging
+import hmac
+import hashlib
+import time
 import jwt
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -34,9 +37,12 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
 SESSION_SECRET = os.environ.get('SESSION_SECRET', 'dev-session')
 TWITTER_API_KEY = os.environ.get('TWITTER_API_KEY', '')
 TWITTER_API_SECRET = os.environ.get('TWITTER_API_SECRET', '')
+# Link to blockheadsbtc.xyz's own holder-verification page (wallet connect + Ordinal
+# check happens over there; it hands the user back to nscribed via a `bh_token`).
 HOLDER_VERIFY_URL = os.environ.get('HOLDER_VERIFY_URL', '').strip()
-HOLDER_SHARED_SECRET = os.environ.get('HOLDER_SHARED_SECRET', '')
-REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'false').lower() in ('1', 'true', 'yes')
+# Shared HMAC key with blockheadsbtc.xyz for verifying `bh_token` handoff tokens.
+BLOCKHEADS_SSO_SECRET = os.environ.get('BLOCKHEADS_SSO_SECRET', '')
+REQUIRE_HOLDER = os.environ.get('REQUIRE_HOLDER', 'true').lower() in ('1', 'true', 'yes')
 
 APP_NAME = "nscribed"
 DEMO_REMOVE_THRESHOLD = 10  # demo profiles auto-clear once this many real users join
@@ -213,62 +219,69 @@ async def auth_me(user: dict = Depends(get_current_user)):
     data = public_profile(user)
     data["holder"] = bool(user.get("holder", False))
     data["holder_verified_at"] = user.get("holder_verified_at")
+    data["require_holder"] = REQUIRE_HOLDER
     return data
 
 
-# ---------- Holder verification (connects to external verifier app) ----------
-def make_state_token(user_id: str) -> str:
-    payload = {"sub": user_id, "typ": "holder_state",
-               "exp": datetime.now(timezone.utc) + timedelta(minutes=15)}
-    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+# ---------- Holder verification (blockheadsbtc.xyz verifies the wallet, then hands
+# the user back to nscribed with a signed `bh_token`) ----------
+def verify_handoff_token(raw: str, secret: str) -> Optional[dict]:
+    """Verify a Blockheads holder handoff token: '<btc_address>:<unix_exp>.<hmac_hex>',
+    HMAC-SHA256 signed with the shared BLOCKHEADS_SSO_SECRET."""
+    if not raw or not secret:
+        return None
+    last_dot = raw.rfind(".")
+    if last_dot < 0:
+        return None
+    payload, mac = raw[:last_dot], raw[last_dot + 1:]
+    expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(mac, expected):
+        return None
+    last_colon = payload.rfind(":")
+    if last_colon < 0:
+        return None
+    address = payload[:last_colon]
+    try:
+        exp = int(payload[last_colon + 1:])
+    except ValueError:
+        return None
+    if time.time() > exp:
+        return None
+    return {"address": address}
 
 
 @api_router.get("/holder/status")
 async def holder_status(user: dict = Depends(get_current_user)):
     return {"holder": bool(user.get("holder", False)),
             "holder_verified_at": user.get("holder_verified_at"),
-            "configured": bool(HOLDER_VERIFY_URL)}
+            "configured": bool(BLOCKHEADS_SSO_SECRET),
+            "verify_url": HOLDER_VERIFY_URL}
 
 
-@api_router.post("/holder/start")
-async def holder_start(user: dict = Depends(get_current_user)):
-    """Hand the user off to the external holder-verification app (friend's app).
-    We pass a short-lived signed `state` token + a `return_url` to come back to."""
-    if not HOLDER_VERIFY_URL:
+class LinkWalletBody(BaseModel):
+    token: str
+
+
+@api_router.post("/holder/link-wallet")
+async def link_wallet(payload: LinkWalletBody, user: dict = Depends(get_current_user)):
+    """Consume a `bh_token` issued by blockheadsbtc.xyz once it verified the wallet
+    holds a Blockhead, and attach that holder status to the signed-in nscribed account."""
+    if not BLOCKHEADS_SSO_SECRET:
         raise HTTPException(status_code=503, detail="Holder verification not configured yet")
-    state = make_state_token(user["id"])
-    return_url = f"{APP_BASE_URL}/api/holder/callback"
-    sep = "&" if "?" in HOLDER_VERIFY_URL else "?"
-    redirect_url = (f"{HOLDER_VERIFY_URL}{sep}state={state}"
-                    f"&return_url={return_url}&handle={user.get('handle','')}")
-    return {"redirect_url": redirect_url}
-
-
-@api_router.get("/holder/callback")
-async def holder_callback(state: str = "", result: str = "", secret: str = "",
-                          wallet: str = ""):
-    """Called/redirected to by the external verifier app once it has checked the
-    wallet + Ordinals holdings. Expected contract (adjustable to the friend's app):
-      GET /api/holder/callback?state=<token>&result=verified&secret=<shared>&wallet=<addr>
-    """
-    target = f"{APP_BASE_URL}/access"
-    if HOLDER_SHARED_SECRET and secret != HOLDER_SHARED_SECRET:
-        return RedirectResponse(f"{target}?holder=error")
-    try:
-        payload = jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
-        assert payload.get("typ") == "holder_state"
-        user_id = payload["sub"]
-    except Exception:
-        return RedirectResponse(f"{target}?holder=error")
-
-    verified = result.lower() in ("verified", "true", "ok", "1")
-    update = {"holder": verified}
-    if verified:
-        update["holder_verified_at"] = datetime.now(timezone.utc).isoformat()
-        if wallet:
-            update["holder_wallet"] = wallet
-    await db.users.update_one({"id": user_id}, {"$set": update})
-    return RedirectResponse(f"{target}?holder={'ok' if verified else 'failed'}")
+    parsed = verify_handoff_token(payload.token, BLOCKHEADS_SSO_SECRET)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "holder": True,
+        "holder_verified_at": datetime.now(timezone.utc).isoformat(),
+        "holder_wallet": parsed["address"],
+    }})
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    data = public_profile(fresh)
+    data["holder"] = True
+    data["holder_verified_at"] = fresh.get("holder_verified_at")
+    data["require_holder"] = REQUIRE_HOLDER
+    return data
 
 
 # ---------- Upload / files (stored in MongoDB GridFS — self-contained) ----------
