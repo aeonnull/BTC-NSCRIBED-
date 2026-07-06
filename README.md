@@ -13,8 +13,19 @@ everything you've made and everything you've collected, then share a single clea
 - **Image uploads** — upload a profile picture and an image for every artwork.
 - **Clean shareable links** — every profile lives at `/<handle>`, with a one-tap copy button.
 - **Public by default** — anyone can view a profile; only the owner can edit their own.
-- **Holder access gate (optional)** — membership can be gated to verified holders via an
-  external verification service.
+- **Holder access gate** — profile creation/editing is gated to verified Blockheads
+  holders (`REQUIRE_HOLDER`, on by default).
+
+## Blockheads holder handoff
+
+Wallet connection and Ordinal verification happen on blockheadsbtc.xyz, not in nscribed.
+Once verified there, the user is sent to `https://nscribed.xyz/?bh_token=<address>:<exp>.<hmac>`
+(HMAC-SHA256 over `<address>:<exp>`, signed with the shared `BLOCKHEADS_SSO_SECRET`, valid
+15 minutes). The frontend picks up `bh_token` from the URL on any page, and once the user is
+signed in with X (immediately, or after completing sign-in), posts it to
+`POST /api/holder/link-wallet`, which verifies the signature and marks that X-linked account
+as a holder. Wallet addresses are never handled or stored anywhere except the verified
+`holder_wallet` field.
 
 ## Tech stack
 
@@ -58,8 +69,8 @@ Backend (`backend/.env`):
 | `JWT_SECRET` | Secret for signing session tokens |
 | `SESSION_SECRET` | Secret for the OAuth session middleware |
 | `TWITTER_API_KEY` / `TWITTER_API_SECRET` | X (Twitter) app credentials |
-| `HOLDER_VERIFY_URL` | External holder-verification service URL (optional) |
-| `HOLDER_SHARED_SECRET` | Shared secret for the verification callback (optional) |
+| `HOLDER_VERIFY_URL` | Link to blockheadsbtc.xyz's holder-verification page (optional) |
+| `BLOCKHEADS_SSO_SECRET` | Shared HMAC key with blockheadsbtc.xyz for verifying `bh_token` handoff tokens |
 | `REQUIRE_HOLDER` | Gate profile creation/editing to verified holders. Defaults to `true`; set to `false` to open it up |
 
 Frontend (`frontend/.env`):

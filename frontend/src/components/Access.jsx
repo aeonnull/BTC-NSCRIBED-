@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { XLogo } from "../lib/icons";
 
 export default function Access() {
   const { user, ready, login } = useAuth();
-  const [params] = useSearchParams();
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-
-  const result = params.get("holder");
 
   useEffect(() => {
     if (ready && user) {
@@ -19,26 +15,13 @@ export default function Access() {
     }
   }, [ready, user]);
 
-  useEffect(() => {
-    if (result === "ok") setMsg("✓ Verified — you're in.");
-    else if (result === "failed") setMsg("We couldn't confirm a matching Ordinal in that wallet.");
-    else if (result === "error") setMsg("Verification link was invalid or expired. Try again.");
-  }, [result]);
-
-  const start = async () => {
-    setBusy(true);
-    setMsg("");
-    try {
-      const { data } = await api.post("/holder/start");
-      window.location.href = data.redirect_url;
-    } catch (e) {
-      if (e?.response?.status === 503) {
-        setMsg("Holder verification isn't connected yet — coming soon.");
-      } else {
-        setMsg("Something went wrong. Please try again.");
-      }
-      setBusy(false);
+  const start = () => {
+    if (!status?.verify_url) {
+      setMsg("Holder verification isn't connected yet — coming soon.");
+      return;
     }
+    setBusy(true);
+    window.location.href = status.verify_url;
   };
 
   if (ready && !user) {

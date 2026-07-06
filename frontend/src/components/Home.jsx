@@ -28,7 +28,7 @@ function PersonTile({ p, onClick }) {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, login } = useAuth();
+  const { user, login, ready, hasPendingWalletLink } = useAuth();
   const [artists, setArtists] = useState([]);
   const [collectors, setCollectors] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -53,6 +53,12 @@ export default function Home() {
           <h1>One link for all your <em>digital art</em>.</h1>
           <p className="sub">Whether you create it or collect it — show your digital art in one place, then drop a single clean link in your X bio.</p>
           <div className="req"><span className="dot"></span> the only thing we require is your <b>X account</b> — everything else is yours to choose</div>
+          {ready && !user && hasPendingWalletLink() && (
+            <div className="access-card ok" style={{ marginTop: 24, maxWidth: 480 }} data-testid="pending-wallet-link">
+              <div className="access-title">✓ Blockheads holding verified</div>
+              <div className="access-sub">Sign in with X to finish linking it to your nscribed account.</div>
+            </div>
+          )}
           {!user && (
             <div style={{ marginTop: 24 }}>
               <button className="btn-primary" data-testid="hero-join" onClick={login}>Claim your profile with X</button>
