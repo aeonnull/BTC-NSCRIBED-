@@ -96,6 +96,30 @@ serves it from the FastAPI backend in a single container, listening on `$PORT` (
 
 That's it — no Emergent account or platform-specific dependency is required.
 
+### Deploying on Vercel
+
+The repo is also preconfigured for Vercel (serverless):
+
+- `pyproject.toml` points Vercel's FastAPI preset at `backend.server:app` and pins a
+  slim runtime dependency set.
+- `scripts/vercel-build.sh` builds the React frontend into `/public` (served by Vercel's
+  CDN); the FastAPI function handles `/api/*`.
+- `vercel.json` rewrites all non-`/api` paths to `index.html` for client-side routing.
+
+To go live on Vercel:
+
+1. Import this GitHub repo in the Vercel dashboard (framework preset: **FastAPI**).
+2. Add the environment variables above under **Settings → Environment Variables**
+   (`MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `SESSION_SECRET`, `TWITTER_API_KEY`,
+   `TWITTER_API_SECRET`, `APP_BASE_URL=https://<your-domain>`). Leave
+   `REACT_APP_BACKEND_URL` unset so the frontend uses relative `/api` paths.
+3. Add your domain under **Settings → Domains** and set `APP_BASE_URL` to it.
+4. Register `https://<your-domain>/api/auth/twitter/callback` in your X app settings.
+
+> **Note:** on serverless, uploaded images are capped at 4MB (function response limit).
+> For heavy image use, a container host (Railway/Render, via the `Dockerfile`) or
+> external object storage is a better fit.
+
 ---
 
 © nscribed — by Blockheads

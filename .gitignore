@@ -27,6 +27,8 @@ next-env.d.ts
 
 # Production builds
 /build
+frontend/build
+/public
 dist/
 dist
 

@@ -1,0 +1,33 @@
+[project]
+name = "nscribed"
+version = "1.0.0"
+description = "nscribed — one link for all your digital art"
+requires-python = ">=3.11"
+# Slim runtime deps for the Vercel serverless function. This is intentionally a
+# subset of backend/requirements.txt (which also carries local dev/test tooling) —
+# only what backend/server.py + art.py import at runtime, to stay well under
+# Vercel's 250MB function size limit.
+dependencies = [
+    "fastapi==0.110.1",
+    "starlette==0.37.2",
+    "pydantic==2.13.4",
+    "motor==3.3.1",
+    "pymongo==4.6.3",
+    "dnspython==2.8.0",
+    "authlib==1.7.2",
+    "httpx==0.28.1",
+    "cryptography==49.0.0",
+    "pyjwt==2.13.0",
+    "python-multipart==0.0.32",
+    "python-dotenv==1.2.2",
+    "itsdangerous==2.2.0",
+]
+
+# Vercel's FastAPI framework preset picks up this app as the serverless entrypoint.
+[tool.vercel]
+entrypoint = "backend.server:app"
+
+# Build the React frontend into /public before the function is bundled; Vercel
+# serves everything in /public statically from its CDN.
+[tool.vercel.scripts]
+build = "bash scripts/vercel-build.sh"
