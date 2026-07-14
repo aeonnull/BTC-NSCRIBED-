@@ -334,7 +334,7 @@ def _rotate_daily(items, window=12):
 
 
 @api_router.get("/profiles")
-async def list_profiles():
+async def list_profiles(user: dict = Depends(get_current_user)):
     projection = {
         "_id": 0, "id": 1, "handle": 1, "name": 1, "type": 1, "verified": 1,
         "bio": 1, "avatar": 1, "links": 1, "marketplaces": 1, "collections": 1,
@@ -348,7 +348,7 @@ async def list_profiles():
 
 
 @api_router.get("/profiles/{handle}")
-async def get_profile(handle: str):
+async def get_profile(handle: str, user: dict = Depends(get_current_user)):
     u = await db.users.find_one({"handle": handle}, {"_id": 0})
     if not u:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -401,7 +401,7 @@ async def _attach_likes(entries):
 
 
 @api_router.get("/recent")
-async def recent_works(limit: int = 8):
+async def recent_works(limit: int = 8, user: dict = Depends(get_current_user)):
     entries = await _all_work_entries()
     entries.sort(key=lambda e: e["uploaded_at"] or "", reverse=True)
     # Spread discovery: at most 2 pieces per profile in the latest row.

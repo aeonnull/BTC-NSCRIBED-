@@ -9,6 +9,7 @@ import Collection from "@/components/Collection";
 import EditProfile from "@/components/EditProfile";
 import Access from "@/components/Access";
 import AuthCallback from "@/components/AuthCallback";
+import Gate from "@/components/Gate";
 
 function App() {
   return (
@@ -16,14 +17,16 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Header />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/edit" element={<EditProfile />} />
-            <Route path="/access" element={<Access />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/:handle/c/:cid" element={<Collection />} />
-            <Route path="/:handle" element={<Profile />} />
-          </Routes>
+          <Gate>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/edit" element={<EditProfile />} />
+              <Route path="/access" element={<Access />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/:handle/c/:cid" element={<Collection />} />
+              <Route path="/:handle" element={<Profile />} />
+            </Routes>
+          </Gate>
           <Footer />
         </BrowserRouter>
       </AuthProvider>
