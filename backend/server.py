@@ -27,9 +27,12 @@ from art import art_uri, build_demo_works
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Tolerate a missing MONGO_URL at import time (e.g. Vercel's build-time introspection
+# of the app) — motor connects lazily on first query. maxPoolSize keeps the connection
+# count low on serverless hosts. Set MONGO_URL / DB_NAME in your host's env for runtime.
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+client = AsyncIOMotorClient(mongo_url, maxPoolSize=10)
+db = client[os.environ.get('DB_NAME', 'nscribed')]
 fs_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="uploads")
 
 APP_BASE_URL = os.environ.get('APP_BASE_URL', '').rstrip('/')
@@ -292,8 +295,10 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_
     if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
     data = await file.read()
-    if len(data) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image too large (max 8MB)")
+    # Cap at 4MB: serverless hosts (e.g. Vercel) limit function response bodies to
+    # ~4.5MB, and uploaded images are served back through GET /api/files/{id}.
+    if len(data) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 4MB)")
     file_id = await fs_bucket.upload_from_stream(
         f"{user['id']}/{uuid.uuid4()}.{ext}",
         data,
