@@ -70,9 +70,31 @@ Frontend (`frontend/.env`):
 
 ## Deployment
 
-Deployable on any host (VPS, Railway, etc.). After deploying, set `APP_BASE_URL` and
-`REACT_APP_BACKEND_URL` to your live domain and register the production OAuth callback
-`https://<your-domain>/api/auth/twitter/callback` in your X app settings.
+The app is host-agnostic. The included `Dockerfile` builds the React frontend and
+serves it from the FastAPI backend in a single container, listening on `$PORT` (default
+`8001`), so it runs on any Docker host — Railway, Render, Fly.io, a plain VPS, etc.
+
+### Go live
+
+1. **Database** — provision a MongoDB instance (e.g. MongoDB Atlas free tier) and note
+   its connection string.
+2. **Deploy the container** — point your host at this repo (it auto-detects the
+   `Dockerfile`) or build/push it yourself:
+   ```bash
+   docker build -t nscribed .
+   docker run -p 8001:8001 --env-file backend/.env nscribed
+   ```
+3. **Set environment variables** on the host (see the tables above). At minimum:
+   `MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `SESSION_SECRET`, `TWITTER_API_KEY`,
+   `TWITTER_API_SECRET`, and `APP_BASE_URL` set to your live domain
+   (e.g. `https://nscribed.xyz`).
+4. **Frontend URL** — set `REACT_APP_BACKEND_URL` to the same public domain so the
+   frontend calls the API on the live host. (If frontend and backend share one domain,
+   as with this Dockerfile, you can leave it empty to use relative `/api` paths.)
+5. **Register the OAuth callback** — in your X (Twitter) app settings add
+   `https://<your-domain>/api/auth/twitter/callback`.
+
+That's it — no Emergent account or platform-specific dependency is required.
 
 ---
 
